@@ -1,0 +1,80 @@
+# ============================================
+# Cloud Storage API - Configuración de la Aplicación
+# ============================================
+
+spring:
+  application:
+    name: cloud-storage-api
+
+  # --- Configuración de Base de Datos ---
+  datasource:
+    url: jdbc:postgresql://localhost:5432/cloudstorage
+    username: cloudstorage
+    password: cloudstorage
+
+  # --- Configuración de JPA/Hibernate ---
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+
+  # --- Configuración de Multipart (subida de archivos) ---
+  servlet:
+    multipart:
+      max-file-size: -1
+      max-request-size: -1
+
+# --- Configuración de la Aplicación ---
+app:
+  jwt:
+    secret: ${APP_JWT_SECRET:defaultJwtSecretKeyThatShouldBeChangedInProduction2024!}
+    expiration-ms: 86400000  # 24 horas en milisegundos
+  encryption:
+    key: "${APP_ENCRYPTION_KEY:dGhpcyBpcyBhIDMyIGJ5dGUga2V5ISEhMTIzNDU2Nzg=}"
+  storage:
+    location: ${APP_STORAGE_LOCATION:./uploads}
+    quota-bytes: ${APP_STORAGE_QUOTA:5368709120}  # 5 GB por defecto
+  license-key: ${APP_LICENSE_KEY:}
+
+# --- Configuración del Servidor ---
+server:
+  port: 8080
+
+# --- Spring Actuator ---
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+  info:
+    app:
+      enabled: true
+
+# --- SpringDoc / Swagger UI ---
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: alpha
+    tagsSorter: alpha
+    display-request-duration: true
+  info:
+    title: Cloud Storage API
+    description: API REST para almacenamiento seguro de archivos en la nube con cifrado AES-256-GCM
+    version: "1.0.0"
+    contact:
+      name: CloudStorage Team
+
+# --- Configuración de Logging ---
+logging:
+  level:
+    com.cloudstorage: DEBUG
+    org.springframework.security: INFO

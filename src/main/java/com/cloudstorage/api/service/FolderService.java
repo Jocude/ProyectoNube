@@ -1,0 +1,170 @@
+package com.cloudstorage.api.service;
+
+import com.cloudstorage.api.dto.FileMetadataResponse;
+import com.cloudstorage.api.dto.FolderContentsResponse;
+import com.cloudstorage.api.dto.FolderResponse;
+import com.cloudstorage.api.entity.FileMetadata;
+import com.cloudstorage.api.entity.Folder;
+import com.cloudstorage.api.entity.User;
+import com.cloudstorage.api.repository.FileMetadataRepository;
+import com.cloudstorage.api.repository.FolderRepository;
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * Servicio para gestionar la lógica de carpetas e integración de contenidos.
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class FolderService {
+
+    private final FolderRepository folderRepository;
+    private final FileMetadataRepository fileMetadataRepository;
+    private final FileStorageService fileStorageService;
+    private final LicenseValidatorService licenseValidatorService;
+
+    /**
+     * Crea una nueva carpeta en la ruta indicada.
+     */
+    @Transactional
+    public FolderResponse createFolder(String name, UUID parentId, User owner) {
+        String cleanName = name.trim();
+        if (cleanName.isEmpty()) {
+            throw new IllegalArgumentException("El nombre de la carpeta no puede estar vacío");
+        }
+
+        boolean exists = (parentId == null)
+                ? folderRepository.existsByNameAndOwnerIdAndParentIsNull(cleanName, owner.getId())
+                : folderRepository.existsByNameAndOwnerIdAndParentId(cleanName, owner.getId(), parentId);
+
+        if (exists) {
+            throw new IllegalArgumentException("Ya existe una carpeta con el nombre '" + cleanName + "' en esta ubicación");
+        }
+
+        Folder parent = null;
+        if (parentId != null) {
+            parent = folderRepository.findByIdAndOwnerId(parentId, owner.getId())
+                    .orElseThrow(() -> new EntityNotFoundException("Carpeta padre no encontrada"));
+        }
+
+        Folder folder = Folder.builder()
+                .name(cleanName)
+                .parent(parent)
+                .owner(owner)
+                .build();
+
+        Folder saved = folderRepository.save(folder);
+        log.info("Carpeta creada: id={}, nombre='{}', parentId={}, usuario={}",
+                saved.getId(), saved.getName(), parentId, owner.getId());
+
+        return FolderResponse.fromEntity(saved);
+    }
+
+    /**
+     * Renombra una carpeta existente.
+     */
+    @Transactional
+    public FolderResponse renameFolder(UUID folderId, String newName, User owner) {
+        Folder folder = folderRepository.findByIdAndOwnerId(folderId, owner.getId())
+                .orElseThrow(() -> new EntityNotFoundException("Carpeta no encontrada"));
+
+        String cleanName = newName.trim();
+        if (cleanName.isEmpty()) {
+            throw new IllegalArgumentException("El nombre de la carpeta no puede estar vacío");
+        }
+
+        folder.setName(cleanName);
+        Folder saved = folderRepository.save(folder);
+        log.info("Carpeta renombrada: id={}, nuevoNombre='{}', usuario={}", folderId, cleanName, owner.getId());
+        return FolderResponse.fromEntity(saved);
+    }
+
+    /**
+     * Obtiene todos los contenidos (carpetas, archivos, breadcrumbs y almacenamiento)
+     * de un directorio determinado.
+     */
+    @Transactional(readOnly = true)
+    public FolderContentsResponse getFolderContents(UUID folderId, User owner) {
+        FolderResponse currentFolderDto = null;
+        List<FolderResponse> breadcrumbs = new ArrayList<>();
+
+        if (folderId != null) {
+            Folder currentFolder = folderRepository.findByIdAndOwnerId(folderId, owner.getId())
+                    .orElseThrow(() -> new EntityNotFoundException("Carpeta no encontrada"));
+            currentFolderDto = FolderResponse.fromEntity(currentFolder);
+
+            Folder temp = currentFolder;
+            while (temp != null) {
+                breadcrumbs.add(FolderResponse.fromEntity(temp));
+                temp = temp.getParent();
+            }
+            Collections.reverse(breadcrumbs);
+        }
+
+        List<Folder> folders = (folderId == null)
+                ? folderRepository.findByOwnerIdAndParentIsNull(owner.getId())
+                : folderRepository.findByOwnerIdAndParentId(owner.getId(), folderId);
+
+        List<FolderResponse> folderResponses = folders.stream()
+                .map(FolderResponse::fromEntity)
+                .toList();
+
+        List<FileMetadata> files = (folderId == null)
+                ? fileMetadataRepository.findByOwnerIdAndFolderIsNullAndDeletedAtIsNullOrderByUploadedAtDesc(owner.getId())
+                : fileMetadataRepository.findByOwnerIdAndFolderIdAndDeletedAtIsNullOrderByUploadedAtDesc(owner.getId(), folderId);
+
+        List<FileMetadataResponse> fileResponses = files.stream()
+                .map(FileMetadataResponse::fromEntity)
+                .toList();
+
+        Long storageUsed = fileMetadataRepository.sumFileSizeByOwnerId(owner.getId());
+
+        return FolderContentsResponse.builder()
+                .currentFolder(currentFolderDto)
+                .folders(folderResponses)
+                .files(fileResponses)
+                .breadcrumbs(breadcrumbs)
+                .storageUsed(storageUsed)
+                .storageQuota(licenseValidatorService.getAllowedQuota())
+                .build();
+    }
+
+    /**
+     * Elimina recursivamente una carpeta, todos sus archivos físicos y sus subcarpetas.
+     */
+    @Transactional
+    public void deleteFolder(UUID folderId, User owner) {
+        Folder folder = folderRepository.findByIdAndOwnerId(folderId, owner.getId())
+                .orElseThrow(() -> new EntityNotFoundException("Carpeta no encontrada"));
+
+        log.info("Iniciando eliminación recursiva de la carpeta: id={}, nombre='{}', usuario={}",
+                folder.getId(), folder.getName(), owner.getId());
+
+        deleteFolderRecursively(folder, owner);
+    }
+
+    private void deleteFolderRecursively(Folder folder, User owner) {
+        List<Folder> subfolders = folderRepository.findByOwnerIdAndParentId(owner.getId(), folder.getId());
+        for (Folder sub : subfolders) {
+            deleteFolderRecursively(sub, owner);
+        }
+
+        List<FileMetadata> files = fileMetadataRepository.findByOwnerIdAndFolderIdOrderByUploadedAtDesc(owner.getId(), folder.getId());
+        for (FileMetadata file : files) {
+            fileStorageService.delete(file.getId(), owner);
+        }
+
+        folderRepository.delete(folder);
+        log.info("Carpeta eliminada: id={}, nombre='{}'", folder.getId(), folder.getName());
+    }
+}

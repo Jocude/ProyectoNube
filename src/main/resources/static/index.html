@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Cloud Storage — Tu nube personal, segura y privada. Almacena, descarga y gestiona tus archivos con cifrado AES-256.">
+    <title>Cloud Storage — Tu Nube Personal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☁️</text></svg>">
+</head>
+<body>
+
+    <!-- ========================================= -->
+    <!-- Contenedor de Notificaciones Toast        -->
+    <!-- ========================================= -->
+    <div id="toast-container"></div>
+
+    <!-- ========================================= -->
+    <!-- Sección de Autenticación (Login/Registro) -->
+    <!-- ========================================= -->
+    <section id="auth-section">
+        <div class="auth-card">
+            <!-- Encabezado con logo y título -->
+            <div class="auth-header">
+                <div class="auth-logo">☁️</div>
+                <h1>Cloud Storage</h1>
+                <p>Tu nube personal, segura y privada</p>
+            </div>
+
+            <!-- Pestañas Login / Registro -->
+            <div class="auth-tabs">
+                <button class="auth-tab active" data-tab="login">Iniciar Sesión</button>
+                <button class="auth-tab" data-tab="register">Registrarse</button>
+            </div>
+
+            <!-- Formulario de Login -->
+            <form id="login-form" class="auth-form" autocomplete="on">
+                <div class="form-group">
+                    <label for="login-email">Correo electrónico</label>
+                    <input type="email" id="login-email" name="email" required
+                           placeholder="tu@correo.com" autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Contraseña</label>
+                    <input type="password" id="login-password" name="password" required
+                           placeholder="••••••••" autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-primary" id="login-btn">
+                    Iniciar Sesión
+                </button>
+            </form>
+
+            <!-- Formulario de Registro -->
+            <form id="register-form" class="auth-form hidden" autocomplete="on">
+                <div class="form-group">
+                    <label for="register-name">Nombre completo</label>
+                    <input type="text" id="register-name" name="name" required
+                           placeholder="Tu nombre" autocomplete="name">
+                </div>
+                <div class="form-group">
+                    <label for="register-email">Correo electrónico</label>
+                    <input type="email" id="register-email" name="email" required
+                           placeholder="tu@correo.com" autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="register-password">Contraseña</label>
+                    <input type="password" id="register-password" name="password" required
+                           placeholder="Mínimo 8 caracteres" autocomplete="new-password"
+                           minlength="8">
+                </div>
+                <button type="submit" class="btn btn-primary" id="register-btn">
+                    Crear Cuenta
+                </button>
+            </form>
+        </div>
+    </section>
+
+    <!-- ========================================= -->
+    <!-- Sección del Dashboard (Panel Principal)   -->
+    <!-- ========================================= -->
+    <section id="dashboard-section" class="hidden">
+
+        <!-- Barra superior -->
+        <header class="dashboard-header">
+            <div class="header-left">
+                <span class="logo-small">☁️</span>
+                <h2>Cloud Storage</h2>
+            </div>
+            <div class="header-right">
+                <span id="user-greeting" class="user-greeting"></span>
+                <button id="b2b-settings-btn" class="btn-gear" title="Configuración B2B" style="background:none; border:none; color:#fff; font-size:1.25rem; cursor:pointer; margin-right:1rem; transition:transform 0.3s ease; padding:0.2rem;" onmouseover="this.style.transform='rotate(45deg)'" onmouseout="this.style.transform='rotate(0deg)'">⚙️</button>
+                <button id="logout-btn" class="btn btn-outline">Cerrar Sesión</button>
+            </div>
+        </header>
+
+        <!-- Contenido principal -->
+        <main class="dashboard-main">
+
+            <!-- Barra de progreso de almacenamiento (Cuota) -->
+            <div id="storage-quota-container" class="storage-quota-container">
+                <div class="storage-quota-header">
+                    <span>Almacenamiento: <strong id="storage-used-text">0 B</strong> de <strong id="storage-quota-text">50 GB</strong></span>
+                    <span id="storage-percent-text">0% usado</span>
+                </div>
+                <div class="storage-quota-bar">
+                    <div id="storage-quota-fill" class="storage-quota-fill" style="width: 0%;"></div>
+                </div>
+            </div>
+ 
+            <!-- Zona de subida de archivos (Drag & Drop) -->
+            <div id="upload-zone" class="upload-zone">
+                <div class="upload-zone-content">
+                    <div class="upload-icon">📤</div>
+                    <h3>Arrastra tus archivos aquí</h3>
+                    <p>o haz clic para seleccionar desde tu equipo</p>
+                </div>
+                <input type="file" id="file-input" hidden multiple>
+            </div>
+ 
+            <!-- Barra de progreso de subida -->
+            <div id="upload-progress" class="upload-progress hidden">
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+                <span class="progress-text">0%</span>
+            </div>
+ 
+            <!-- Encabezado de sección de archivos -->
+            <div class="files-section-header">
+                <div class="files-section-left">
+                    <h3>Mis Archivos</h3>
+                    <span id="file-count" class="file-count">0 elementos</span>
+                </div>
+                <div class="files-section-right">
+                    <button id="new-folder-btn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">📁 Nueva Carpeta</button>
+                </div>
+            </div>
+
+            <!-- Navegación de carpetas (Breadcrumbs) -->
+            <div id="breadcrumbs-container" class="breadcrumbs-container">
+                <!-- Se generará dinámicamente -->
+            </div>
+
+            <!-- Grid de archivos -->
+            <div id="files-grid" class="files-grid"></div>
+
+            <!-- Estado vacío -->
+            <div id="empty-state" class="empty-state hidden">
+                <div class="empty-icon">📭</div>
+                <h3>No hay archivos aún</h3>
+                <p>Sube tu primer archivo arrastrándolo a la zona superior o haciendo clic en ella.</p>
+            </div>
+
+            <!-- Estado de carga -->
+            <div id="loading-state" class="loading-state hidden">
+                <div class="spinner"></div>
+                <p>Cargando archivos…</p>
+            </div>
+
+        </main>
+    </section>
+
+    <!-- ========================================= -->
+    <!-- Modal de Previsualización                 -->
+    <!-- ========================================= -->
+    <div id="preview-modal" class="preview-modal hidden">
+        <div class="preview-modal-content">
+            <div class="preview-header">
+                <h3 id="preview-title">Archivo</h3>
+                <button id="preview-close" class="btn-close">&times;</button>
+            </div>
+            <div id="preview-body" class="preview-body">
+                <!-- El contenido de la previsualización irá aquí -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================= -->
+    <!-- Modal para Nueva Carpeta                  -->
+    <!-- ========================================= -->
+    <div id="folder-modal" class="preview-modal hidden">
+        <div class="preview-modal-content" style="max-width: 400px; padding: 1.5rem; background: var(--surface-bg, rgba(255, 255, 255, 0.05)); border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08)); border-radius: 1rem;">
+            <div class="preview-header" style="padding: 0 0 1rem 0; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.08); background: none;">
+                <h3 style="margin: 0; font-size: 1.1rem; color: #fff;">Crear Nueva Carpeta</h3>
+                <button id="folder-modal-close" class="btn-close">&times;</button>
+            </div>
+            <form id="create-folder-form">
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label for="folder-name-input" style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: rgba(255,255,255,0.6);">Nombre de la carpeta</label>
+                    <input type="text" id="folder-name-input" required placeholder="Nueva carpeta" autocomplete="off" style="width: 100%; padding: 0.6rem; border-radius: 0.4rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff;">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.6rem; border-radius: 0.4rem;">Crear Carpeta</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========================================= -->
+    <!-- Modal: Autenticación Admin B2B            -->
+    <!-- ========================================= -->
+    <div id="b2b-login-modal" class="preview-modal hidden">
+        <div class="preview-modal-content" style="max-width: 380px; padding: 1.5rem; background: var(--surface-bg, rgba(255, 255, 255, 0.05)); border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08)); border-radius: 1rem;">
+            <div class="preview-header" style="padding: 0 0 1rem 0; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.08); background: none;">
+                <h3 style="margin: 0; font-size: 1.1rem; color: #fff;">🔑 Seguridad B2B Admin</h3>
+                <button id="b2b-login-close" class="btn-close">&times;</button>
+            </div>
+            <form id="b2b-login-form">
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label for="b2b-admin-password" style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: rgba(255,255,255,0.6);">Contraseña del Administrador B2B</label>
+                    <input type="password" id="b2b-admin-password" required placeholder="Contraseña común" autocomplete="off" style="width: 100%; padding: 0.6rem; border-radius: 0.4rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff;">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.6rem; border-radius: 0.4rem;">Acceder a Ajustes</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========================================= -->
+    <!-- Modal: Panel de Ajustes Admin B2B         -->
+    <!-- ========================================= -->
+    <div id="b2b-config-modal" class="preview-modal hidden">
+        <div class="preview-modal-content" style="max-width: 500px; padding: 1.5rem; background: var(--surface-bg, rgba(255, 255, 255, 0.05)); border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08)); border-radius: 1rem; max-height: 80vh; overflow-y: auto;">
+            <div class="preview-header" style="padding: 0 0 1rem 0; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.08); background: none;">
+                <h3 style="margin: 0; font-size: 1.2rem; color: #fff;">⚙️ Configuración B2B</h3>
+                <button id="b2b-config-close" class="btn-close">&times;</button>
+            </div>
+            <form id="b2b-config-form">
+                <!-- Rutas de disco -->
+                <h4 style="color: #667eea; margin: 0 0 0.8rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.3rem; font-size: 0.95rem;">Rutas en el Servidor</h4>
+                <div class="form-group" style="margin-bottom: 0.8rem;">
+                    <label for="b2b-host-storage" style="display: block; margin-bottom: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">HOST_STORAGE_PATH (Ruta Archivos)</label>
+                    <input type="text" id="b2b-host-storage" required style="width: 100%; padding: 0.5rem; border-radius: 0.3rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem;">
+                </div>
+                <div class="form-group" style="margin-bottom: 0.8rem;">
+                    <label for="b2b-host-db" style="display: block; margin-bottom: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">HOST_DB_PATH (Ruta Base de Datos)</label>
+                    <input type="text" id="b2b-host-db" required style="width: 100%; padding: 0.5rem; border-radius: 0.3rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem;">
+                </div>
+
+                <!-- Credenciales y Seguridad -->
+                <h4 style="color: #667eea; margin: 1.2rem 0 0.8rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.3rem; font-size: 0.95rem;">Seguridad y Llaves</h4>
+                <div class="form-group" style="margin-bottom: 0.8rem;">
+                    <label for="b2b-db-password" style="display: block; margin-bottom: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">DB_PASSWORD (Base de Datos)</label>
+                    <input type="password" id="b2b-db-password" required style="width: 100%; padding: 0.5rem; border-radius: 0.3rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem;">
+                </div>
+                <div class="form-group" style="margin-bottom: 0.8rem;">
+                    <label for="b2b-jwt-secret" style="display: block; margin-bottom: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">JWT_SECRET (Firma de Sesión)</label>
+                    <input type="password" id="b2b-jwt-secret" required style="width: 100%; padding: 0.5rem; border-radius: 0.3rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem;">
+                </div>
+                <div class="form-group" style="margin-bottom: 0.8rem;">
+                    <label for="b2b-enc-key" style="display: block; margin-bottom: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">ENCRYPTION_KEY (Maestra AES Base64)</label>
+                    <input type="text" id="b2b-enc-key" required style="width: 100%; padding: 0.5rem; border-radius: 0.3rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem;">
+                </div>
+
+                <!-- Clave de Licencia -->
+                <h4 style="color: #667eea; margin: 1.2rem 0 0.8rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.3rem; font-size: 0.95rem;">Licenciamiento Corporativo</h4>
+                <div class="form-group" style="margin-bottom: 0.8rem;">
+                    <label for="b2b-license-key" style="display: block; margin-bottom: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">APP_LICENSE_KEY (Firma RSA JWT)</label>
+                    <textarea id="b2b-license-key" required rows="3" style="width: 100%; padding: 0.5rem; border-radius: 0.3rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.8rem; resize: none; font-family: monospace;"></textarea>
+                </div>
+
+                <!-- Cambiar contraseña B2B Admin -->
+                <h4 style="color: #667eea; margin: 1.2rem 0 0.8rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.3rem; font-size: 0.95rem;">Cambiar Contraseña B2B Admin</h4>
+                <div class="form-group" style="margin-bottom: 0.8rem;">
+                    <label for="b2b-new-password" style="display: block; margin-bottom: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">Nueva Contraseña de Admin</label>
+                    <input type="password" id="b2b-new-password" placeholder="Dejar vacío para no cambiar" style="width: 100%; padding: 0.5rem; border-radius: 0.3rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem;">
+                </div>
+                <div class="form-group" style="margin-bottom: 1.2rem;">
+                    <label for="b2b-confirm-password" style="display: block; margin-bottom: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">Confirmar Nueva Contraseña</label>
+                    <input type="password" id="b2b-confirm-password" placeholder="Confirmar contraseña" style="width: 100%; padding: 0.5rem; border-radius: 0.3rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem;">
+                </div>
+
+                <div style="background: rgba(255, 165, 0, 0.1); border: 1px dashed orange; padding: 0.8rem; border-radius: 0.5rem; margin-bottom: 1.2rem; font-size: 0.8rem; color: #ffbc42; line-height: 1.4;">
+                    ⚠️ <strong>Nota:</strong> Los cambios en rutas, base de datos o claves de seguridad requerirán reiniciar los contenedores mediante <code>deploy.bat</code> o <code>deploy.sh</code>. El cambio de contraseña B2B y licencia se aplican de forma inmediata.
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.7rem; border-radius: 0.4rem;">Guardar Cambios</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Enlace de acceso público (abajo a la derecha) -->
+    <div id="public-url-container" class="public-url-container hidden">
+        <span id="public-url-text" title="Haz clic para copiar">Cargando enlace público...</span>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>

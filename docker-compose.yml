@@ -1,0 +1,67 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: cloudstorage-db
+    environment:
+      POSTGRES_DB: cloudstorage
+      POSTGRES_USER: cloudstorage
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-securepassword123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ${HOST_DB_PATH:-./pgdata}:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cloudstorage"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+    container_name: cloudstorage-app
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/cloudstorage
+      - SPRING_DATASOURCE_USERNAME=cloudstorage
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD:-securepassword123}
+      - APP_JWT_SECRET=${JWT_SECRET:-defaultJwtSecretKeyThatShouldBeChangedInProduction2026!}
+      - APP_ENCRYPTION_KEY=${ENCRYPTION_KEY:-dGhpcyBpcyBhIDMyIGJ5dGUga2V5ISEhMTIzNDU2Nzg=}
+      - APP_STORAGE_LOCATION=/app/uploads
+      - APP_LICENSE_KEY=${APP_LICENSE_KEY}
+    volumes:
+      - ${HOST_STORAGE_PATH:-./uploads}:/app/uploads
+      - ./.env:/app/.env
+    restart: unless-stopped
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudstorage-tunnel
+    depends_on:
+      - app
+    # El script captura la URL pública y la escribe en uploads/public_url.txt
+    # para que la API pueda leerla y mostrarla en /api/info
+    entrypoint: >
+      sh -c "
+        cloudflared tunnel --url http://app:8080 2>&1 | tee /tmp/tunnel.log &
+        TUNNEL_PID=$$!
+        echo 'Esperando URL del túnel...';
+        for i in $(seq 1 30); do
+          URL=$(grep -oP 'https://[a-z0-9\-]+\.trycloudflare\.com' /tmp/tunnel.log | head -1);
+          if [ -n \"$$URL\" ]; then
+            echo \"URL del túnel: $$URL\";
+            echo \"$$URL\" > /app/uploads/public_url.txt;
+            break;
+          fi;
+          sleep 2;
+        done;
+        wait $$TUNNEL_PID
+      "
+    volumes:
+      - ${HOST_STORAGE_PATH:-./uploads}:/app/uploads
+    restart: unless-stopped
