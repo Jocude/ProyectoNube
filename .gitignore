@@ -1,0 +1,21 @@
+# --- Secretos y configuración local ---
+.env
+.env.*
+!.env.example
+!.env.template
+CLAUDE.local.md
+.claude/settings.local.json
+
+# --- Datos en tiempo de ejecución ---
+pgdata/
+uploads/
+
+# --- Build de Maven ---
+target/
+
+# --- IDEs y sistema ---
+.idea/
+*.iml
+.vscode/
+.DS_Store
+*.log
