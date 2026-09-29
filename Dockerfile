@@ -18,8 +18,12 @@ RUN mvn clean package -DskipTests
 # ============================================
 FROM eclipse-temurin:21-jre-alpine
 
-# Crear usuario no-root para seguridad
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Crear usuario no-root para seguridad.
+# Usa el mismo UID/GID que el usuario del host para poder escribir en la carpeta
+# de subidas montada (bind mount) sin recurrir a chmod 777.
+ARG APP_UID=1000
+ARG APP_GID=1000
+RUN addgroup -S -g "$APP_GID" appgroup && adduser -S -u "$APP_UID" -G appgroup appuser
 
 WORKDIR /app
 

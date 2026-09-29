@@ -7,6 +7,8 @@ import com.cloudstorage.api.entity.User;
 import com.cloudstorage.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -42,6 +44,13 @@ public class AuthService {
     private final JwtService jwtService;
 
     /**
+     * Si es {@code false}, solo se permite registrar al primer usuario (el propietario del
+     * servidor); el resto de registros se rechazan. Configurable con APP_REGISTRATION_ENABLED.
+     */
+    @Value("${app.registration.enabled:true}")
+    private boolean registrationEnabled = true;
+
+    /**
      * Registra un nuevo usuario en el sistema.
      * <p>
      * Verifica que el email no esté registrado previamente, cifra la contraseña,
@@ -54,6 +63,10 @@ public class AuthService {
      */
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        if (!registrationEnabled && userRepository.count() > 0) {
+            log.warn("Registro rechazado (registro deshabilitado): {}", request.getEmail());
+            throw new AccessDeniedException("El registro de nuevos usuarios está deshabilitado");
+        }
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new RuntimeException("El email ya está registrado");
         }

@@ -67,9 +67,11 @@ mkdir -p "$HOST_STORAGE_PATH"
 echo "Creando carpeta de base de datos: $HOST_DB_PATH"
 mkdir -p "$HOST_DB_PATH"
 
-# Asegurar permisos correctos para que Docker pueda escribir en ellas
-chmod 777 "$HOST_STORAGE_PATH"
-chmod 777 "$HOST_DB_PATH"
+# El contenedor de la app se construye con nuestro UID/GID (ver Dockerfile), así que
+# puede escribir en estas carpetas sin abrirlas a todo el mundo con chmod 777.
+export APP_UID APP_GID
+APP_UID=$(id -u)
+APP_GID=$(id -g)
 
 echo "Directorios inicializados correctamente."
 echo ""

@@ -8,6 +8,7 @@ CLAUDE.local.md
 
 # --- Datos en tiempo de ejecución ---
 pgdata/
+pgdata.*/
 uploads/
 
 # --- Build de Maven ---

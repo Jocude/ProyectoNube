@@ -5,22 +5,20 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
+import java.nio.charset.StandardCharsets;
+import java.util.Date;
+import java.util.UUID;
+import javax.crypto.SecretKey;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
-import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
-import java.util.Date;
-import java.util.UUID;
-
 /**
  * Servicio para la gestión de tokens JWT.
- * <p>
- * Proporciona métodos para generar, validar y extraer información
- * de tokens JWT utilizados en la autenticación de la API.
- * </p>
+ *
+ * <p>Proporciona métodos para generar, validar y extraer información de tokens JWT utilizados en la
+ * autenticación de la API.
  *
  * @author CloudStorage API
  * @version 1.0
@@ -37,12 +35,27 @@ public class JwtService {
 
     private SecretKey key;
 
+    /** Longitud mínima del secreto JWT en bytes (256 bits, exigido por HS256). */
+    private static final int MIN_SECRET_BYTES = 32;
+
     /**
      * Inicializa la clave de firma HMAC-SHA a partir del secreto configurado.
+     *
+     * @throws IllegalStateException si el secreto falta o es demasiado corto; así la aplicación no
+     *     arranca con una clave débil o conocida
      */
     @PostConstruct
     public void init() {
-        this.key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+        if (jwtSecret == null || jwtSecret.isBlank()) {
+            throw new IllegalStateException(
+                    "Falta el secreto JWT: configure APP_JWT_SECRET (JWT_SECRET en .env)");
+        }
+        byte[] secretBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+        if (secretBytes.length < MIN_SECRET_BYTES) {
+            throw new IllegalStateException(
+                    "El secreto JWT debe tener al menos " + MIN_SECRET_BYTES + " bytes");
+        }
+        this.key = Keys.hmacShaKeyFor(secretBytes);
         log.info("Clave JWT inicializada correctamente");
     }
 
@@ -89,11 +102,10 @@ public class JwtService {
 
     /**
      * Verifica si el token JWT es válido para el usuario proporcionado.
-     * <p>
-     * Un token es válido si el nombre de usuario coincide y no ha expirado.
-     * </p>
      *
-     * @param token       el token JWT a validar
+     * <p>Un token es válido si el nombre de usuario coincide y no ha expirado.
+     *
+     * @param token el token JWT a validar
      * @param userDetails los detalles del usuario contra el cual validar
      * @return {@code true} si el token es válido, {@code false} en caso contrario
      */
@@ -109,11 +121,7 @@ public class JwtService {
      * @return los claims contenidos en el token
      */
     private Claims extractAllClaims(String token) {
-        return Jwts.parser()
-                .verifyWith(key)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
+        return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
     }
 
     /**

@@ -1070,9 +1070,6 @@ document.addEventListener('DOMContentLoaded', () => {
   
   const b2bHostStorage     = document.getElementById('b2b-host-storage');
   const b2bHostDb          = document.getElementById('b2b-host-db');
-  const b2bDbPassword      = document.getElementById('b2b-db-password');
-  const b2bJwtSecret       = document.getElementById('b2b-jwt-secret');
-  const b2bEncKey          = document.getElementById('b2b-enc-key');
   const b2bLicenseKey      = document.getElementById('b2b-license-key');
   const b2bNewPassword     = document.getElementById('b2b-new-password');
   const b2bConfirmPassword = document.getElementById('b2b-confirm-password');
@@ -1151,9 +1148,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
       b2bHostStorage.value = config.HOST_STORAGE_PATH || '';
       b2bHostDb.value      = config.HOST_DB_PATH || '';
-      b2bDbPassword.value  = config.DB_PASSWORD || '';
-      b2bJwtSecret.value   = config.JWT_SECRET || '';
-      b2bEncKey.value      = config.ENCRYPTION_KEY || '';
       b2bLicenseKey.value  = config.APP_LICENSE_KEY || '';
     } catch (error) {
       showToast('Error al cargar la configuración: ' + error.message, 'error');
@@ -1165,11 +1159,6 @@ document.addEventListener('DOMContentLoaded', () => {
   b2bConfigForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const hostStorage = b2bHostStorage.value.trim();
-    const hostDb      = b2bHostDb.value.trim();
-    const dbPassword  = b2bDbPassword.value;
-    const jwtSecret   = b2bJwtSecret.value;
-    const encKey      = b2bEncKey.value.trim();
     const licenseKey  = b2bLicenseKey.value.trim();
 
     const newPass     = b2bNewPassword.value;
@@ -1193,14 +1182,7 @@ document.addEventListener('DOMContentLoaded', () => {
           'X-B2B-Admin-Password': verifiedB2bPassword
         },
         body: JSON.stringify({
-          config: {
-            HOST_STORAGE_PATH: hostStorage,
-            HOST_DB_PATH: hostDb,
-            DB_PASSWORD: dbPassword,
-            JWT_SECRET: jwtSecret,
-            ENCRYPTION_KEY: encKey,
-            APP_LICENSE_KEY: licenseKey
-          },
+          licenseKey: licenseKey,
           newAdminPassword: newPass || null
         })
       });
@@ -1212,11 +1194,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         b2bConfigModal.classList.add('hidden');
         b2bConfigForm.reset();
-
-        // Mostrar advertencia persistente si cambiaron parámetros estructurales
-        setTimeout(() => {
-          showToast('⚠️ Los cambios de infraestructura requieren reiniciar el stack Docker.', 'info');
-        }, 1500);
 
         // Recargar los archivos por si cambió la cuota autorizada en vivo
         loadFiles();

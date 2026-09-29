@@ -2,10 +2,12 @@ package com.cloudstorage.api.service;
 
 import com.cloudstorage.api.exception.TooManyRequestsException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -66,8 +68,9 @@ public class RateLimitService {
 
     /**
      * Limpia las entradas expiradas del mapa de buckets para liberar memoria.
-     * Llamar periódicamente si el servidor tiene mucho tráfico.
+     * Se ejecuta automáticamente cada 5 minutos.
      */
+    @Scheduled(fixedDelay = 5, timeUnit = TimeUnit.MINUTES)
     public void cleanExpiredBuckets() {
         long now = Instant.now().getEpochSecond();
         buckets.entrySet().removeIf(entry -> now - entry.getValue().windowStart >= WINDOW_SECONDS);

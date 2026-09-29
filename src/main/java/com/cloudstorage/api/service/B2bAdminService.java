@@ -1,150 +1,199 @@
 package com.cloudstorage.api.service;
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
+/**
+ * Servicio del panel de administración B2B.
+ *
+ * <p>La contraseña de administración se lee de {@code B2B_ADMIN_PASSWORD} en el archivo .env. Si no
+ * está definida, el panel queda deshabilitado (no existe contraseña por defecto).
+ *
+ * <p>Por seguridad, el panel solo expone valores no secretos (rutas y licencia) y solo permite
+ * cambiar la licencia y la propia contraseña de administración. Los secretos ({@code JWT_SECRET},
+ * {@code ENCRYPTION_KEY}, {@code DB_PASSWORD}) nunca se leen ni se escriben desde la web: cambiar
+ * la clave de cifrado, por ejemplo, dejaría ilegibles todos los archivos.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class B2bAdminService {
 
-    private final LicenseValidatorService licenseValidatorService;
-    private static final String DEFAULT_ADMIN_PASSWORD = "admin admin";
+    private static final String ADMIN_PASSWORD_KEY = "B2B_ADMIN_PASSWORD";
+    private static final String LICENSE_KEY = "APP_LICENSE_KEY";
+
+    /** Claves del .env que el panel puede mostrar (ninguna es secreta). */
+    private static final List<String> VISIBLE_KEYS =
+            List.of("HOST_STORAGE_PATH", "HOST_DB_PATH", LICENSE_KEY);
+
+    /** Caracteres de un JWT (Base64URL y puntos). Impide inyectar saltos de línea en el .env. */
+    private static final Pattern LICENSE_PATTERN = Pattern.compile("^[A-Za-z0-9._-]+$");
 
     /**
-     * Resuelve la ruta del archivo .env activo en el sistema.
+     * Contraseña de admin: 12-128 caracteres ASCII visibles, sin espacios ni caracteres que el .env
+     * o Docker Compose interpretan de forma especial ({@code # $ " ' \ `}).
+     */
+    private static final Pattern ADMIN_PASSWORD_PATTERN =
+            Pattern.compile("^[A-Za-z0-9!%&()*+,\\-./:;<=>?@\\[\\]^_{|}~]{12,128}$");
+
+    private final LicenseValidatorService licenseValidatorService;
+
+    /**
+     * Resuelve la ruta del archivo .env activo (montado en el contenedor o local en desarrollo).
      */
     private Path getEnvFilePath() {
-        File envInContainer = new File("/app/.env");
-        if (envInContainer.exists()) {
-            return envInContainer.toPath();
+        Path envInContainer = Path.of("/app/.env");
+        if (Files.exists(envInContainer)) {
+            return envInContainer;
         }
-        // Fallback para ejecución local en desarrollo
         return Path.of(".env");
     }
 
-    /**
-     * Lee todos los parámetros actuales del archivo .env.
-     */
-    public Map<String, String> readConfig() throws IOException {
+    /** Lee las variables del .env tal cual, sin valores por defecto. */
+    private Map<String, String> readEnv() throws IOException {
         Path envPath = getEnvFilePath();
-        Map<String, String> config = new LinkedHashMap<>();
-
-        // Valores por defecto
-        config.put("HOST_STORAGE_PATH", "./uploads");
-        config.put("HOST_DB_PATH", "./pgdata");
-        config.put("DB_PASSWORD", "securepassword123");
-        config.put("JWT_SECRET", "defaultJwtSecretKeyThatShouldBeChangedInProduction2026!");
-        config.put("ENCRYPTION_KEY", "dGhpcyBpcyBhIDMyIGJ5dGUga2V5ISEhMTIzNDU2Nzg=");
-        config.put("APP_LICENSE_KEY", "");
-        config.put("B2B_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD);
-
+        Map<String, String> env = new LinkedHashMap<>();
         if (!Files.exists(envPath)) {
             log.warn("El archivo .env no existe en la ruta: {}", envPath.toAbsolutePath());
-            return config;
+            return env;
         }
-
-        List<String> lines = Files.readAllLines(envPath, StandardCharsets.UTF_8);
-        for (String line : lines) {
+        for (String line : Files.readAllLines(envPath, StandardCharsets.UTF_8)) {
             String trimmed = line.trim();
             if (trimmed.isEmpty() || trimmed.startsWith("#")) {
                 continue;
             }
             int eqIdx = trimmed.indexOf('=');
             if (eqIdx > 0) {
-                String key = trimmed.substring(0, eqIdx).trim();
-                String val = trimmed.substring(eqIdx + 1).trim();
-                config.put(key, val);
+                env.put(trimmed.substring(0, eqIdx).trim(), trimmed.substring(eqIdx + 1).trim());
             }
         }
-
-        return config;
+        return env;
     }
 
     /**
-     * Autentica la contraseña del administrador B2B.
+     * Devuelve la configuración visible en el panel (sin secretos).
+     *
+     * @return mapa con las rutas del host y la licencia actual
+     * @throws IOException si no se puede leer el .env
+     */
+    public Map<String, String> readPublicConfig() throws IOException {
+        Map<String, String> env = readEnv();
+        Map<String, String> visible = new LinkedHashMap<>();
+        for (String key : VISIBLE_KEYS) {
+            visible.put(key, env.getOrDefault(key, ""));
+        }
+        return visible;
+    }
+
+    /**
+     * Comprueba la contraseña de administración en tiempo constante.
+     *
+     * @param password contraseña recibida
+     * @return {@code true} si coincide; {@code false} si no coincide o el panel está deshabilitado
      */
     public boolean authenticate(String password) {
-        try {
-            Map<String, String> config = readConfig();
-            String storedPassword = config.getOrDefault("B2B_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD);
-            return storedPassword.equals(password);
-        } catch (IOException e) {
-            log.error("Error al leer la contraseña del .env: {}", e.getMessage());
-            return DEFAULT_ADMIN_PASSWORD.equals(password);
+        if (password == null || password.isEmpty()) {
+            return false;
         }
+        String storedPassword;
+        try {
+            storedPassword = readEnv().get(ADMIN_PASSWORD_KEY);
+        } catch (IOException e) {
+            log.error("Error al leer la contraseña de administración del .env: {}", e.getMessage());
+            return false;
+        }
+        if (storedPassword == null || storedPassword.isEmpty()) {
+            log.warn("Panel B2B deshabilitado: {} no está definida en el .env", ADMIN_PASSWORD_KEY);
+            return false;
+        }
+        // MessageDigest.isEqual compara en tiempo constante: no revela por el tiempo de
+        // respuesta cuántos caracteres iniciales son correctos.
+        return MessageDigest.isEqual(
+                storedPassword.getBytes(StandardCharsets.UTF_8),
+                password.getBytes(StandardCharsets.UTF_8));
     }
 
     /**
-     * Guarda los nuevos parámetros de configuración en el archivo .env,
-     * realizando comprobaciones en caliente para licencias y contraseñas.
+     * Actualiza la licencia y/o la contraseña de administración en el .env. El llamador debe haber
+     * autenticado antes al administrador.
+     *
+     * @param newLicenseKey nueva licencia (se valida y aplica en caliente), o vacío para no cambiar
+     * @param newAdminPassword nueva contraseña de administración, o vacío para no cambiar
+     * @throws IllegalArgumentException si algún valor no es válido
+     * @throws IOException si no se puede escribir el .env
      */
-    public synchronized void updateConfig(Map<String, String> newParams, String currentPassword, String newAdminPassword) throws Exception {
-        // 1. Validar la contraseña de administrador actual
-        if (!authenticate(currentPassword)) {
-            throw new IllegalArgumentException("La contraseña de administrador actual es incorrecta");
-        }
+    public synchronized void updateConfig(String newLicenseKey, String newAdminPassword)
+            throws IOException {
+        Map<String, String> keysToUpdate = new HashMap<>();
 
-        // 2. Si se cambia la clave de licencia, validarla en caliente ANTES de guardar
-        String newLicense = newParams.get("APP_LICENSE_KEY");
-        if (newLicense != null && !newLicense.trim().isEmpty()) {
-            try {
-                // Esto actualizará las cuotas y datos en memoria inmediatamente
-                licenseValidatorService.validateAndApplyLicense(newLicense.trim());
-            } catch (Exception e) {
-                throw new IllegalArgumentException("La nueva clave de licencia no es válida: " + e.getMessage());
+        if (newLicenseKey != null && !newLicenseKey.isBlank()) {
+            String license = newLicenseKey.trim();
+            if (!LICENSE_PATTERN.matcher(license).matches()) {
+                throw new IllegalArgumentException(
+                        "La clave de licencia tiene un formato inválido");
             }
+            try {
+                // Actualiza cuota y titular en memoria inmediatamente
+                licenseValidatorService.validateAndApplyLicense(license);
+            } catch (Exception e) {
+                throw new IllegalArgumentException(
+                        "La nueva clave de licencia no es válida: " + e.getMessage());
+            }
+            keysToUpdate.put(LICENSE_KEY, license);
         }
 
-        // 3. Leer y reescribir el .env conservando comentarios y formato
+        if (newAdminPassword != null && !newAdminPassword.isEmpty()) {
+            if (!ADMIN_PASSWORD_PATTERN.matcher(newAdminPassword).matches()) {
+                throw new IllegalArgumentException(
+                        "La contraseña de administración debe tener entre 12 y 128 caracteres,"
+                                + " sin espacios ni los caracteres # $ \" ' \\ `");
+            }
+            keysToUpdate.put(ADMIN_PASSWORD_KEY, newAdminPassword);
+        }
+
+        if (keysToUpdate.isEmpty()) {
+            return;
+        }
+        writeEnv(keysToUpdate);
+        log.info("Archivo .env actualizado desde el panel B2B: {}", keysToUpdate.keySet());
+    }
+
+    /** Reescribe el .env sustituyendo solo las claves indicadas y conservando el resto. */
+    private void writeEnv(Map<String, String> keysToUpdate) throws IOException {
         Path envPath = getEnvFilePath();
+        Map<String, String> pending = new HashMap<>(keysToUpdate);
         List<String> outputLines = new ArrayList<>();
-        Map<String, String> keysToUpdate = new HashMap<>(newParams);
-
-        // Si se especificó cambio de contraseña de administración
-        if (newAdminPassword != null && !newAdminPassword.trim().isEmpty()) {
-            keysToUpdate.put("B2B_ADMIN_PASSWORD", newAdminPassword.trim());
-        }
 
         if (Files.exists(envPath)) {
-            List<String> lines = Files.readAllLines(envPath, StandardCharsets.UTF_8);
-            for (String line : lines) {
+            for (String line : Files.readAllLines(envPath, StandardCharsets.UTF_8)) {
                 String trimmed = line.trim();
-                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
-                    outputLines.add(line);
-                    continue;
-                }
                 int eqIdx = line.indexOf('=');
-                if (eqIdx > 0) {
+                if (!trimmed.startsWith("#") && eqIdx > 0) {
                     String key = line.substring(0, eqIdx).trim();
-                    if (keysToUpdate.containsKey(key)) {
-                        String newVal = keysToUpdate.remove(key);
-                        // Mantener la indentación o espaciado original
-                        outputLines.add(key + "=" + newVal);
-                    } else {
-                        outputLines.add(line);
+                    if (pending.containsKey(key)) {
+                        outputLines.add(key + "=" + pending.remove(key));
+                        continue;
                     }
-                } else {
-                    outputLines.add(line);
                 }
+                outputLines.add(line);
             }
         }
+        pending.forEach((key, value) -> outputLines.add(key + "=" + value));
 
-        // Agregar las claves que no existían originalmente en el archivo
-        for (Map.Entry<String, String> entry : keysToUpdate.entrySet()) {
-            outputLines.add(entry.getKey() + "=" + entry.getValue());
-        }
-
-        // 4. Escribir los cambios físicamente
+        // Se escribe en el mismo archivo (no con renombrado atómico) porque el .env es un
+        // bind mount de un solo fichero y Docker no permite reemplazarlo.
         Files.write(envPath, outputLines, StandardCharsets.UTF_8);
-        log.info("Archivo de configuración .env actualizado exitosamente.");
     }
 }

@@ -6,13 +6,13 @@ echo   INICIANDO CLOUD STORAGE B2B (MODO AUTO-DESPLIEGUE)
 echo ========================================================
 echo.
 echo Levantando los servicios en segundo plano...
-docker-compose up -d
+docker compose up -d --build
 
 echo.
 echo Esperando a que el tunel seguro de Cloudflare se establezca...
 timeout /t 10 /nobreak > nul
 
-for /f "delims=" %%a in ('powershell -Command "$log = docker-compose logs tunnel; if ($log -match 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com') { $matches[0] }"') do set PUBLIC_URL=%%a
+for /f "delims=" %%a in ('powershell -Command "$log = docker compose logs tunnel; if ($log -match 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com') { $matches[0] }"') do set PUBLIC_URL=%%a
 
 if "!PUBLIC_URL!"=="" (
     echo [ADVERTENCIA] No se pudo extraer la URL. Abriendo localhost...

@@ -227,29 +227,14 @@
             </div>
             <form id="b2b-config-form">
                 <!-- Rutas de disco -->
-                <h4 style="color: #667eea; margin: 0 0 0.8rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.3rem; font-size: 0.95rem;">Rutas en el Servidor</h4>
+                <h4 style="color: #667eea; margin: 0 0 0.8rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.3rem; font-size: 0.95rem;">Rutas en el Servidor (solo lectura, se cambian en .env)</h4>
                 <div class="form-group" style="margin-bottom: 0.8rem;">
                     <label for="b2b-host-storage" style="display: block; margin-bottom: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">HOST_STORAGE_PATH (Ruta Archivos)</label>
-                    <input type="text" id="b2b-host-storage" required style="width: 100%; padding: 0.5rem; border-radius: 0.3rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem;">
+                    <input type="text" id="b2b-host-storage" readonly style="opacity: 0.6; width: 100%; padding: 0.5rem; border-radius: 0.3rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem;">
                 </div>
                 <div class="form-group" style="margin-bottom: 0.8rem;">
                     <label for="b2b-host-db" style="display: block; margin-bottom: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">HOST_DB_PATH (Ruta Base de Datos)</label>
-                    <input type="text" id="b2b-host-db" required style="width: 100%; padding: 0.5rem; border-radius: 0.3rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem;">
-                </div>
-
-                <!-- Credenciales y Seguridad -->
-                <h4 style="color: #667eea; margin: 1.2rem 0 0.8rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.3rem; font-size: 0.95rem;">Seguridad y Llaves</h4>
-                <div class="form-group" style="margin-bottom: 0.8rem;">
-                    <label for="b2b-db-password" style="display: block; margin-bottom: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">DB_PASSWORD (Base de Datos)</label>
-                    <input type="password" id="b2b-db-password" required style="width: 100%; padding: 0.5rem; border-radius: 0.3rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem;">
-                </div>
-                <div class="form-group" style="margin-bottom: 0.8rem;">
-                    <label for="b2b-jwt-secret" style="display: block; margin-bottom: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">JWT_SECRET (Firma de Sesión)</label>
-                    <input type="password" id="b2b-jwt-secret" required style="width: 100%; padding: 0.5rem; border-radius: 0.3rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem;">
-                </div>
-                <div class="form-group" style="margin-bottom: 0.8rem;">
-                    <label for="b2b-enc-key" style="display: block; margin-bottom: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">ENCRYPTION_KEY (Maestra AES Base64)</label>
-                    <input type="text" id="b2b-enc-key" required style="width: 100%; padding: 0.5rem; border-radius: 0.3rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem;">
+                    <input type="text" id="b2b-host-db" readonly style="opacity: 0.6; width: 100%; padding: 0.5rem; border-radius: 0.3rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem;">
                 </div>
 
                 <!-- Clave de Licencia -->
@@ -263,7 +248,7 @@
                 <h4 style="color: #667eea; margin: 1.2rem 0 0.8rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.3rem; font-size: 0.95rem;">Cambiar Contraseña B2B Admin</h4>
                 <div class="form-group" style="margin-bottom: 0.8rem;">
                     <label for="b2b-new-password" style="display: block; margin-bottom: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">Nueva Contraseña de Admin</label>
-                    <input type="password" id="b2b-new-password" placeholder="Dejar vacío para no cambiar" style="width: 100%; padding: 0.5rem; border-radius: 0.3rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem;">
+                    <input type="password" id="b2b-new-password" placeholder="Dejar vacío para no cambiar (mín. 12 caracteres)" minlength="12" maxlength="128" autocomplete="new-password" style="width: 100%; padding: 0.5rem; border-radius: 0.3rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem;">
                 </div>
                 <div class="form-group" style="margin-bottom: 1.2rem;">
                     <label for="b2b-confirm-password" style="display: block; margin-bottom: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">Confirmar Nueva Contraseña</label>
@@ -271,7 +256,7 @@
                 </div>
 
                 <div style="background: rgba(255, 165, 0, 0.1); border: 1px dashed orange; padding: 0.8rem; border-radius: 0.5rem; margin-bottom: 1.2rem; font-size: 0.8rem; color: #ffbc42; line-height: 1.4;">
-                    ⚠️ <strong>Nota:</strong> Los cambios en rutas, base de datos o claves de seguridad requerirán reiniciar los contenedores mediante <code>deploy.bat</code> o <code>deploy.sh</code>. El cambio de contraseña B2B y licencia se aplican de forma inmediata.
+                    ⚠️ <strong>Nota:</strong> La licencia y la contraseña B2B se aplican de forma inmediata. Por seguridad, las rutas y las claves (base de datos, JWT, cifrado) solo se cambian editando el archivo <code>.env</code> del servidor y reiniciando los contenedores.
                 </div>
 
                 <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.7rem; border-radius: 0.4rem;">Guardar Cambios</button>

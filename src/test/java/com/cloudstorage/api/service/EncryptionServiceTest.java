@@ -1,15 +1,20 @@
 package com.cloudstorage.api.service;
 
+import static org.assertj.core.api.Assertions.*;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.FilterOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import static org.assertj.core.api.Assertions.*;
-
 /**
- * Tests unitarios para {@link EncryptionService}.
- * Verifica el ciclo cifrado/descifrado con AES-256-GCM.
+ * Tests unitarios para {@link EncryptionService}. Verifica el ciclo cifrado/descifrado con
+ * AES-256-GCM.
  */
 @DisplayName("EncryptionService Tests")
 class EncryptionServiceTest {
@@ -92,5 +97,59 @@ class EncryptionServiceTest {
         byte[] decrypted = encryptionService.decrypt(encrypted);
 
         assertThat(decrypted).isEqualTo(largeData);
+    }
+
+    @Test
+    @DisplayName("El cifrado en streaming produce un formato que decrypt() sabe leer")
+    void streamingEncryptIsCompatibleWithDecrypt() throws IOException {
+        byte[] original = new byte[3 * 1024 * 1024 + 7]; // tamaño que no es múltiplo del bloque
+        for (int i = 0; i < original.length; i++) {
+            original[i] = (byte) (i * 31);
+        }
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        encryptionService.encrypt(new ByteArrayInputStream(original), out);
+
+        assertThat(encryptionService.decrypt(out.toByteArray())).isEqualTo(original);
+    }
+
+    @Test
+    @DisplayName("El cifrado en streaming no cierra el flujo de salida del llamador")
+    void streamingEncryptDoesNotCloseOutput() throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        boolean[] closed = {false};
+        OutputStream out =
+                new FilterOutputStream(buffer) {
+                    @Override
+                    public void close() {
+                        closed[0] = true;
+                    }
+                };
+
+        encryptionService.encrypt(new ByteArrayInputStream("abc".getBytes()), out);
+
+        assertThat(closed[0]).isFalse();
+        assertThat(encryptionService.decrypt(buffer.toByteArray())).isEqualTo("abc".getBytes());
+    }
+
+    @Test
+    @DisplayName("Una clave que no mide 32 bytes impide arrancar")
+    void initRejectsKeyWithWrongLength() {
+        EncryptionService service = new EncryptionService();
+        // 16 bytes en Base64 (AES-128): no se acepta
+        ReflectionTestUtils.setField(service, "encryptionKeyBase64", "MDEyMzQ1Njc4OWFiY2RlZg==");
+
+        assertThatThrownBy(service::init)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("32 bytes");
+    }
+
+    @Test
+    @DisplayName("Una clave vacía impide arrancar")
+    void initRejectsMissingKey() {
+        EncryptionService service = new EncryptionService();
+        ReflectionTestUtils.setField(service, "encryptionKeyBase64", "");
+
+        assertThatThrownBy(service::init).isInstanceOf(IllegalStateException.class);
     }
 }

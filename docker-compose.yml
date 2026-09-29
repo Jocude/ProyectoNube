@@ -5,9 +5,8 @@ services:
     environment:
       POSTGRES_DB: cloudstorage
       POSTGRES_USER: cloudstorage
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-securepassword123}
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Falta DB_PASSWORD en .env}
+    # Sin puertos publicados: solo la app la usa, por la red interna de Docker
     volumes:
       - ${HOST_DB_PATH:-./pgdata}:/var/lib/postgresql/data
     healthcheck:
@@ -20,6 +19,10 @@ services:
   app:
     build:
       context: .
+      args:
+        # Mismo UID/GID que el usuario del host (start.sh/deploy.sh los exportan)
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
     container_name: cloudstorage-app
     depends_on:
       db:
@@ -29,39 +32,29 @@ services:
     environment:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/cloudstorage
       - SPRING_DATASOURCE_USERNAME=cloudstorage
-      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD:-securepassword123}
-      - APP_JWT_SECRET=${JWT_SECRET:-defaultJwtSecretKeyThatShouldBeChangedInProduction2026!}
-      - APP_ENCRYPTION_KEY=${ENCRYPTION_KEY:-dGhpcyBpcyBhIDMyIGJ5dGUga2V5ISEhMTIzNDU2Nzg=}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD:?Falta DB_PASSWORD en .env}
+      - APP_JWT_SECRET=${JWT_SECRET:?Falta JWT_SECRET en .env}
+      - APP_ENCRYPTION_KEY=${ENCRYPTION_KEY:?Falta ENCRYPTION_KEY en .env}
       - APP_STORAGE_LOCATION=/app/uploads
-      - APP_LICENSE_KEY=${APP_LICENSE_KEY}
+      - APP_LICENSE_KEY=${APP_LICENSE_KEY:?Falta APP_LICENSE_KEY en .env}
+      - APP_MAX_FILE_SIZE=${APP_MAX_FILE_SIZE:-512MB}
+      - APP_STORAGE_QUOTA=${APP_STORAGE_QUOTA:-5368709120}
+      - APP_REGISTRATION_ENABLED=${APP_REGISTRATION_ENABLED:-true}
+      # Solo las peticiones que llegan desde el contenedor del túnel pueden indicar la IP real
+      - APP_TRUSTED_PROXY_HOST=tunnel
     volumes:
       - ${HOST_STORAGE_PATH:-./uploads}:/app/uploads
+      # El panel B2B lee y escribe aquí la licencia y la contraseña de administración
       - ./.env:/app/.env
     restart: unless-stopped
 
   tunnel:
-    image: cloudflare/cloudflared:latest
+    # Versión fija: "latest" puede cambiar sin avisar y romper el despliegue
+    image: cloudflare/cloudflared:2026.9.3
     container_name: cloudstorage-tunnel
     depends_on:
       - app
-    # El script captura la URL pública y la escribe en uploads/public_url.txt
-    # para que la API pueda leerla y mostrarla en /api/info
-    entrypoint: >
-      sh -c "
-        cloudflared tunnel --url http://app:8080 2>&1 | tee /tmp/tunnel.log &
-        TUNNEL_PID=$$!
-        echo 'Esperando URL del túnel...';
-        for i in $(seq 1 30); do
-          URL=$(grep -oP 'https://[a-z0-9\-]+\.trycloudflare\.com' /tmp/tunnel.log | head -1);
-          if [ -n \"$$URL\" ]; then
-            echo \"URL del túnel: $$URL\";
-            echo \"$$URL\" > /app/uploads/public_url.txt;
-            break;
-          fi;
-          sleep 2;
-        done;
-        wait $$TUNNEL_PID
-      "
-    volumes:
-      - ${HOST_STORAGE_PATH:-./uploads}:/app/uploads
+    # La imagen no tiene shell: se ejecuta cloudflared directamente. La URL pública
+    # aparece en los logs; start.sh la extrae y la guarda en uploads/public_url.txt.
+    command: tunnel --url http://app:8080
     restart: unless-stopped

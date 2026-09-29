@@ -9,37 +9,39 @@ import com.cloudstorage.api.repository.FileMetadataRepository;
 import com.cloudstorage.api.repository.FolderRepository;
 import jakarta.annotation.PostConstruct;
 import jakarta.persistence.EntityNotFoundException;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
-
+import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Servicio principal de almacenamiento de archivos.
  *
- * <p>Gestiona las operaciones CRUD de archivos en el sistema de almacenamiento,
- * incluyendo la subida con cifrado AES-256-GCM, la descarga con descifrado,
- * la eliminación suave (soft delete), papelera, restauración y el listado paginado
- * con búsqueda de archivos del usuario.</p>
+ * <p>Gestiona las operaciones CRUD de archivos en el sistema de almacenamiento, incluyendo la
+ * subida con cifrado AES-256-GCM, la descarga con descifrado, la eliminación suave (soft delete),
+ * papelera, restauración y el listado paginado con búsqueda de archivos del usuario.
  *
- * <p>Los archivos se organizan en directorios por usuario y se almacenan
- * cifrados en disco. Los metadatos se persisten en la base de datos.</p>
+ * <p>Los archivos se organizan en directorios por usuario y se almacenan cifrados en disco. Los
+ * metadatos se persisten en la base de datos.
  *
  * @author Cloud Storage API
  * @version 1.0
@@ -58,20 +60,20 @@ public class FileStorageService {
     @Value("${app.storage.location}")
     private String storageLocation;
 
+    @Value("${app.storage.quota-bytes}")
+    private long userQuotaBytes;
+
     private Path rootLocation;
 
     /**
      * Registro inmutable que contiene los metadatos y los datos descifrados de un archivo cargado.
      *
      * @param metadata los metadatos del archivo
-     * @param data     los datos descifrados del archivo
+     * @param data los datos descifrados del archivo
      */
-    public record LoadedFile(FileMetadata metadata, byte[] data) {
-    }
+    public record LoadedFile(FileMetadata metadata, byte[] data) {}
 
-    /**
-     * Inicializa el directorio raíz de almacenamiento, creándolo si no existe.
-     */
+    /** Inicializa el directorio raíz de almacenamiento, creándolo si no existe. */
     @PostConstruct
     public void init() {
         this.rootLocation = Paths.get(storageLocation).toAbsolutePath().normalize();
@@ -79,7 +81,10 @@ public class FileStorageService {
             Files.createDirectories(rootLocation);
             log.info("Directorio de almacenamiento inicializado en: {}", rootLocation);
         } catch (IOException e) {
-            log.error("No se pudo inicializar el directorio de almacenamiento: {}", e.getMessage(), e);
+            log.error(
+                    "No se pudo inicializar el directorio de almacenamiento: {}",
+                    e.getMessage(),
+                    e);
             throw new StorageException("No se pudo inicializar el directorio de almacenamiento");
         }
     }
@@ -87,7 +92,7 @@ public class FileStorageService {
     /**
      * Almacena un archivo subido por el usuario en la raíz, cifrándolo y guardando sus metadatos.
      *
-     * @param file  el archivo multipart subido
+     * @param file el archivo multipart subido
      * @param owner el usuario propietario del archivo
      * @return los metadatos del archivo almacenado como respuesta DTO
      */
@@ -97,11 +102,11 @@ public class FileStorageService {
     }
 
     /**
-     * Almacena un archivo subido por el usuario en una carpeta específica,
-     * cifrándolo y guardando sus metadatos. Valida la cuota de espacio disponible.
+     * Almacena un archivo subido por el usuario en una carpeta específica, cifrándolo y guardando
+     * sus metadatos. Valida la cuota de espacio disponible.
      *
-     * @param file     el archivo multipart subido
-     * @param owner    el usuario propietario del archivo
+     * @param file el archivo multipart subido
+     * @param owner el usuario propietario del archivo
      * @param folderId el ID de la carpeta destino (opcional)
      * @return los metadatos del archivo almacenado
      */
@@ -110,18 +115,12 @@ public class FileStorageService {
         // Validar el archivo
         fileValidationService.validateFile(file);
 
-        // Validar límite de espacio (Cuota licenciada)
-        Long allowedQuota = licenseValidatorService.getAllowedQuota();
-        Long currentUsed = fileMetadataRepository.sumFileSizeByOwnerId(owner.getId());
-        if (currentUsed + file.getSize() > allowedQuota) {
-            log.warn("Límite de espacio excedido para el usuario {}: solicitado={} bytes, usado={} bytes, cuota={} bytes",
-                    owner.getEmail(), file.getSize(), currentUsed, allowedQuota);
-            throw new StorageException("No hay suficiente espacio de almacenamiento disponible. Límite de "
-                    + formatFileSize(allowedQuota) + " excedido.");
-        }
+        // Validar cuota del usuario y límite global de la licencia
+        checkQuota(owner, file.getSize());
 
         // Sanitizar el nombre original del archivo
-        String originalFileName = fileValidationService.sanitizeFileName(file.getOriginalFilename());
+        String originalFileName =
+                fileValidationService.sanitizeFileName(file.getOriginalFilename());
 
         // Generar nombre único de almacenamiento
         String storedName = UUID.randomUUID() + "_" + originalFileName;
@@ -132,8 +131,13 @@ public class FileStorageService {
         // Resolver la carpeta si se proporcionó un ID
         Folder folder = null;
         if (folderId != null) {
-            folder = folderRepository.findByIdAndOwnerId(folderId, owner.getId())
-                    .orElseThrow(() -> new EntityNotFoundException("Carpeta destino no encontrada"));
+            folder =
+                    folderRepository
+                            .findByIdAndOwnerId(folderId, owner.getId())
+                            .orElseThrow(
+                                    () ->
+                                            new EntityNotFoundException(
+                                                    "Carpeta destino no encontrada"));
         }
 
         try {
@@ -144,40 +148,56 @@ public class FileStorageService {
             Path targetPath = userDirectory.resolve(storedName).normalize();
             fileValidationService.validateStoragePath(targetPath, rootLocation);
 
-            // Leer bytes del archivo
-            byte[] originalBytes = file.getBytes();
-
-            // Calcular checksum SHA-256 del archivo original
-            String checksum = computeSha256(originalBytes);
-
-            // Cifrar y escribir en disco
-            byte[] encryptedBytes = encryptionService.encrypt(originalBytes);
-            Files.write(targetPath, encryptedBytes);
+            // Cifrar en streaming hacia disco, calculando a la vez el SHA-256 del original.
+            // Así el archivo nunca se carga entero en memoria.
+            MessageDigest sha256 = newSha256Digest();
+            try (InputStream in = new DigestInputStream(file.getInputStream(), sha256);
+                    OutputStream out =
+                            new BufferedOutputStream(
+                                    Files.newOutputStream(
+                                            targetPath, StandardOpenOption.CREATE_NEW))) {
+                encryptionService.encrypt(in, out);
+            } catch (IOException | RuntimeException e) {
+                // No dejar archivos cifrados a medias en disco
+                Files.deleteIfExists(targetPath);
+                throw e;
+            }
+            String checksum = HexFormat.of().formatHex(sha256.digest());
 
             // Calcular ruta relativa para almacenar en base de datos
             String relativePath = rootLocation.relativize(targetPath).toString();
 
             // Crear entidad de metadatos (uploadedAt es gestionado por @PrePersist)
-            FileMetadata metadata = FileMetadata.builder()
-                    .originalName(originalFileName)
-                    .storedPath(relativePath)
-                    .contentType(file.getContentType())
-                    .fileSize(file.getSize())
-                    .checksum(checksum)
-                    .owner(owner)
-                    .folder(folder)
-                    .build();
+            FileMetadata metadata =
+                    FileMetadata.builder()
+                            .originalName(originalFileName)
+                            .storedPath(relativePath)
+                            .contentType(file.getContentType())
+                            .fileSize(file.getSize())
+                            .checksum(checksum)
+                            .owner(owner)
+                            .folder(folder)
+                            .build();
 
             // Guardar metadatos en la base de datos
             FileMetadata savedMetadata = fileMetadataRepository.save(metadata);
 
-            log.info("Archivo almacenado exitosamente: id={}, nombre='{}', tamaño={} bytes, checksum={}, usuario={}",
-                    savedMetadata.getId(), originalFileName, file.getSize(), checksum, owner.getEmail());
+            log.info(
+                    "Archivo almacenado exitosamente: id={}, nombre='{}', tamaño={} bytes, checksum={}, usuario={}",
+                    savedMetadata.getId(),
+                    originalFileName,
+                    file.getSize(),
+                    checksum,
+                    owner.getEmail());
 
             return FileMetadataResponse.fromEntity(savedMetadata);
 
         } catch (IOException e) {
-            log.error("Error de E/S al almacenar el archivo '{}': {}", originalFileName, e.getMessage(), e);
+            log.error(
+                    "Error de E/S al almacenar el archivo '{}': {}",
+                    originalFileName,
+                    e.getMessage(),
+                    e);
             throw new StorageException("Error al almacenar el archivo: " + originalFileName);
         }
     }
@@ -186,19 +206,26 @@ public class FileStorageService {
      * Carga un archivo del almacenamiento, descifrándolo para su descarga.
      *
      * @param fileId el identificador UUID del archivo
-     * @param owner  el usuario propietario del archivo
+     * @param owner el usuario propietario del archivo
      * @return un registro {@link LoadedFile} con los metadatos y datos descifrados
      * @throws EntityNotFoundException si el archivo no existe o no pertenece al usuario
-     * @throws StorageException        si ocurre un error al leer o descifrar el archivo
+     * @throws StorageException si ocurre un error al leer o descifrar el archivo
      */
     @Transactional(readOnly = true)
     public LoadedFile loadAsResource(UUID fileId, User owner) {
         // Buscar metadatos del archivo (solo activos)
-        FileMetadata metadata = fileMetadataRepository.findByIdAndOwnerIdAndDeletedAtIsNull(fileId, owner.getId())
-                .orElseThrow(() -> {
-                    log.warn("Archivo no encontrado: id={}, usuario={}", fileId, owner.getId());
-                    return new EntityNotFoundException("Archivo no encontrado con id: " + fileId);
-                });
+        FileMetadata metadata =
+                fileMetadataRepository
+                        .findByIdAndOwnerIdAndDeletedAtIsNull(fileId, owner.getId())
+                        .orElseThrow(
+                                () -> {
+                                    log.warn(
+                                            "Archivo no encontrado: id={}, usuario={}",
+                                            fileId,
+                                            owner.getId());
+                                    return new EntityNotFoundException(
+                                            "Archivo no encontrado con id: " + fileId);
+                                });
 
         try {
             // Resolver ruta almacenada
@@ -213,20 +240,27 @@ public class FileStorageService {
             // Descifrar los bytes
             byte[] decryptedBytes = encryptionService.decrypt(encryptedBytes);
 
-            log.info("Archivo cargado exitosamente para descarga: id={}, nombre='{}', usuario={}",
-                    fileId, metadata.getOriginalName(), owner.getId());
+            log.info(
+                    "Archivo cargado exitosamente para descarga: id={}, nombre='{}', usuario={}",
+                    fileId,
+                    metadata.getOriginalName(),
+                    owner.getId());
 
             return new LoadedFile(metadata, decryptedBytes);
 
         } catch (IOException e) {
-            log.error("Error de E/S al cargar el archivo '{}': {}", metadata.getOriginalName(), e.getMessage(), e);
+            log.error(
+                    "Error de E/S al cargar el archivo '{}': {}",
+                    metadata.getOriginalName(),
+                    e.getMessage(),
+                    e);
             throw new StorageException("Error al leer el archivo: " + metadata.getOriginalName());
         }
     }
 
     /**
-     * Carga los bytes cifrados en disco de un archivo para uso interno (e.g., compartición).
-     * No requiere autenticación de usuario propietario (solo por token de compartición).
+     * Carga los bytes cifrados en disco de un archivo para uso interno (e.g., compartición). No
+     * requiere autenticación de usuario propietario (solo por token de compartición).
      *
      * @param metadata los metadatos del archivo a cargar
      * @return bytes descifrados del archivo
@@ -239,47 +273,66 @@ public class FileStorageService {
             byte[] encryptedBytes = Files.readAllBytes(filePath);
             return encryptionService.decrypt(encryptedBytes);
         } catch (IOException e) {
-            log.error("Error de E/S al cargar el archivo '{}': {}", metadata.getOriginalName(), e.getMessage(), e);
+            log.error(
+                    "Error de E/S al cargar el archivo '{}': {}",
+                    metadata.getOriginalName(),
+                    e.getMessage(),
+                    e);
             throw new StorageException("Error al leer el archivo: " + metadata.getOriginalName());
         }
     }
 
     /**
-     * Realiza un soft delete de un archivo (lo mueve a la papelera).
-     * El archivo físico se conserva en disco; solo se marca como eliminado en la BD.
+     * Realiza un soft delete de un archivo (lo mueve a la papelera). El archivo físico se conserva
+     * en disco; solo se marca como eliminado en la BD.
      *
      * @param fileId el identificador UUID del archivo a eliminar
-     * @param owner  el usuario propietario del archivo
+     * @param owner el usuario propietario del archivo
      * @throws EntityNotFoundException si el archivo no existe o no pertenece al usuario
      */
     @Transactional
     public void delete(UUID fileId, User owner) {
-        FileMetadata metadata = fileMetadataRepository.findByIdAndOwnerIdAndDeletedAtIsNull(fileId, owner.getId())
-                .orElseThrow(() -> {
-                    log.warn("Archivo no encontrado para eliminación: id={}, usuario={}", fileId, owner.getId());
-                    return new EntityNotFoundException("Archivo no encontrado con id: " + fileId);
-                });
+        FileMetadata metadata =
+                fileMetadataRepository
+                        .findByIdAndOwnerIdAndDeletedAtIsNull(fileId, owner.getId())
+                        .orElseThrow(
+                                () -> {
+                                    log.warn(
+                                            "Archivo no encontrado para eliminación: id={}, usuario={}",
+                                            fileId,
+                                            owner.getId());
+                                    return new EntityNotFoundException(
+                                            "Archivo no encontrado con id: " + fileId);
+                                });
 
         // Soft delete: marcar como eliminado
         metadata.setDeletedAt(LocalDateTime.now());
         fileMetadataRepository.save(metadata);
 
-        log.info("Archivo movido a papelera: id={}, nombre='{}', usuario={}",
-                fileId, metadata.getOriginalName(), owner.getId());
+        log.info(
+                "Archivo movido a papelera: id={}, nombre='{}', usuario={}",
+                fileId,
+                metadata.getOriginalName(),
+                owner.getId());
     }
 
     /**
      * Restaura un archivo desde la papelera (revierte el soft delete).
      *
      * @param fileId el identificador UUID del archivo a restaurar
-     * @param owner  el usuario propietario del archivo
+     * @param owner el usuario propietario del archivo
      * @return los metadatos del archivo restaurado
      * @throws EntityNotFoundException si el archivo no existe en la papelera
      */
     @Transactional
     public FileMetadataResponse restoreFile(UUID fileId, User owner) {
-        FileMetadata metadata = fileMetadataRepository.findByIdAndOwnerId(fileId, owner.getId())
-                .orElseThrow(() -> new EntityNotFoundException("Archivo no encontrado con id: " + fileId));
+        FileMetadata metadata =
+                fileMetadataRepository
+                        .findByIdAndOwnerId(fileId, owner.getId())
+                        .orElseThrow(
+                                () ->
+                                        new EntityNotFoundException(
+                                                "Archivo no encontrado con id: " + fileId));
 
         if (metadata.getDeletedAt() == null) {
             throw new IllegalStateException("El archivo no está en la papelera");
@@ -288,27 +341,36 @@ public class FileStorageService {
         metadata.setDeletedAt(null);
         FileMetadata saved = fileMetadataRepository.save(metadata);
 
-        log.info("Archivo restaurado desde la papelera: id={}, nombre='{}', usuario={}",
-                fileId, metadata.getOriginalName(), owner.getId());
+        log.info(
+                "Archivo restaurado desde la papelera: id={}, nombre='{}', usuario={}",
+                fileId,
+                metadata.getOriginalName(),
+                owner.getId());
 
         return FileMetadataResponse.fromEntity(saved);
     }
 
     /**
-     * Elimina permanentemente un archivo del disco y de la base de datos.
-     * El archivo debe estar en la papelera (deletedAt != null) antes de eliminarse definitivamente.
+     * Elimina permanentemente un archivo del disco y de la base de datos. El archivo debe estar en
+     * la papelera (deletedAt != null) antes de eliminarse definitivamente.
      *
      * @param fileId el identificador UUID del archivo a eliminar permanentemente
-     * @param owner  el usuario propietario del archivo
+     * @param owner el usuario propietario del archivo
      * @throws EntityNotFoundException si el archivo no existe
      */
     @Transactional
     public void hardDelete(UUID fileId, User owner) {
-        FileMetadata metadata = fileMetadataRepository.findByIdAndOwnerId(fileId, owner.getId())
-                .orElseThrow(() -> new EntityNotFoundException("Archivo no encontrado con id: " + fileId));
+        FileMetadata metadata =
+                fileMetadataRepository
+                        .findByIdAndOwnerId(fileId, owner.getId())
+                        .orElseThrow(
+                                () ->
+                                        new EntityNotFoundException(
+                                                "Archivo no encontrado con id: " + fileId));
 
         if (metadata.getDeletedAt() == null) {
-            throw new IllegalStateException("El archivo debe estar en la papelera antes de eliminarse definitivamente");
+            throw new IllegalStateException(
+                    "El archivo debe estar en la papelera antes de eliminarse definitivamente");
         }
 
         try {
@@ -320,32 +382,44 @@ public class FileStorageService {
                 log.warn("El archivo no existía en disco: '{}'", filePath);
             }
         } catch (IOException e) {
-            log.error("Error de E/S al eliminar físicamente el archivo '{}': {}", metadata.getOriginalName(), e.getMessage(), e);
-            throw new StorageException("Error al eliminar el archivo: " + metadata.getOriginalName());
+            log.error(
+                    "Error de E/S al eliminar físicamente el archivo '{}': {}",
+                    metadata.getOriginalName(),
+                    e.getMessage(),
+                    e);
+            throw new StorageException(
+                    "Error al eliminar el archivo: " + metadata.getOriginalName());
         }
 
         fileMetadataRepository.delete(metadata);
-        log.info("Archivo eliminado definitivamente: id={}, nombre='{}', usuario={}",
-                fileId, metadata.getOriginalName(), owner.getId());
+        log.info(
+                "Archivo eliminado definitivamente: id={}, nombre='{}', usuario={}",
+                fileId,
+                metadata.getOriginalName(),
+                owner.getId());
     }
 
     /**
      * Lista todos los archivos activos del usuario con paginación y búsqueda opcional.
      *
-     * @param owner    el usuario propietario de los archivos
-     * @param search   texto de búsqueda por nombre (puede ser null o vacío para todos)
+     * @param owner el usuario propietario de los archivos
+     * @param search texto de búsqueda por nombre (puede ser null o vacío para todos)
      * @param pageable parámetros de paginación
      * @return página de metadatos de archivos como respuestas DTO
      */
     @Transactional(readOnly = true)
     public Page<FileMetadataResponse> listFiles(User owner, String search, Pageable pageable) {
-        Page<FileMetadata> files = fileMetadataRepository.findByOwnerIdAndSearchTerm(
-                owner.getId(),
-                (search == null || search.isBlank()) ? null : search,
-                pageable);
+        Page<FileMetadata> files =
+                fileMetadataRepository.findByOwnerIdAndSearchTerm(
+                        owner.getId(),
+                        (search == null || search.isBlank()) ? null : search,
+                        pageable);
 
-        log.debug("Listando archivos para el usuario: {}, búsqueda='{}', total={}",
-                owner.getId(), search, files.getTotalElements());
+        log.debug(
+                "Listando archivos para el usuario: {}, búsqueda='{}', total={}",
+                owner.getId(),
+                search,
+                files.getTotalElements());
 
         return files.map(FileMetadataResponse::fromEntity);
     }
@@ -358,8 +432,9 @@ public class FileStorageService {
      */
     @Transactional(readOnly = true)
     public List<FileMetadataResponse> listFiles(User owner) {
-        List<FileMetadata> files = fileMetadataRepository
-                .findByOwnerIdAndDeletedAtIsNullOrderByUploadedAtDesc(owner.getId());
+        List<FileMetadata> files =
+                fileMetadataRepository.findByOwnerIdAndDeletedAtIsNullOrderByUploadedAtDesc(
+                        owner.getId());
         return files.stream().map(FileMetadataResponse::fromEntity).toList();
     }
 
@@ -371,23 +446,29 @@ public class FileStorageService {
      */
     @Transactional(readOnly = true)
     public List<FileMetadataResponse> listDeletedFiles(User owner) {
-        List<FileMetadata> files = fileMetadataRepository
-                .findByOwnerIdAndDeletedAtIsNotNullOrderByDeletedAtDesc(owner.getId());
+        List<FileMetadata> files =
+                fileMetadataRepository.findByOwnerIdAndDeletedAtIsNotNullOrderByDeletedAtDesc(
+                        owner.getId());
         return files.stream().map(FileMetadataResponse::fromEntity).toList();
     }
 
     /**
      * Renombra un archivo cambiando su nombre original.
      *
-     * @param fileId      el identificador del archivo
-     * @param newName     el nuevo nombre para el archivo
-     * @param owner       el usuario propietario
+     * @param fileId el identificador del archivo
+     * @param newName el nuevo nombre para el archivo
+     * @param owner el usuario propietario
      * @return los metadatos actualizados del archivo
      */
     @Transactional
     public FileMetadataResponse renameFile(UUID fileId, String newName, User owner) {
-        FileMetadata metadata = fileMetadataRepository.findByIdAndOwnerIdAndDeletedAtIsNull(fileId, owner.getId())
-                .orElseThrow(() -> new EntityNotFoundException("Archivo no encontrado con id: " + fileId));
+        FileMetadata metadata =
+                fileMetadataRepository
+                        .findByIdAndOwnerIdAndDeletedAtIsNull(fileId, owner.getId())
+                        .orElseThrow(
+                                () ->
+                                        new EntityNotFoundException(
+                                                "Archivo no encontrado con id: " + fileId));
 
         String sanitizedName = fileValidationService.sanitizeFileName(newName);
         if (sanitizedName.isBlank()) {
@@ -397,60 +478,117 @@ public class FileStorageService {
         metadata.setOriginalName(sanitizedName);
         FileMetadata saved = fileMetadataRepository.save(metadata);
 
-        log.info("Archivo renombrado: id={}, nuevoNombre='{}', usuario={}", fileId, sanitizedName, owner.getId());
+        log.info(
+                "Archivo renombrado: id={}, nuevoNombre='{}', usuario={}",
+                fileId,
+                sanitizedName,
+                owner.getId());
         return FileMetadataResponse.fromEntity(saved);
     }
 
     /**
      * Mueve un archivo a otra carpeta.
      *
-     * @param fileId      el identificador del archivo
+     * @param fileId el identificador del archivo
      * @param targetFolderId la carpeta destino (null para raíz)
-     * @param owner       el usuario propietario
+     * @param owner el usuario propietario
      * @return los metadatos actualizados del archivo
      */
     @Transactional
     public FileMetadataResponse moveFile(UUID fileId, UUID targetFolderId, User owner) {
-        FileMetadata metadata = fileMetadataRepository.findByIdAndOwnerIdAndDeletedAtIsNull(fileId, owner.getId())
-                .orElseThrow(() -> new EntityNotFoundException("Archivo no encontrado con id: " + fileId));
+        FileMetadata metadata =
+                fileMetadataRepository
+                        .findByIdAndOwnerIdAndDeletedAtIsNull(fileId, owner.getId())
+                        .orElseThrow(
+                                () ->
+                                        new EntityNotFoundException(
+                                                "Archivo no encontrado con id: " + fileId));
 
         Folder targetFolder = null;
         if (targetFolderId != null) {
-            targetFolder = folderRepository.findByIdAndOwnerId(targetFolderId, owner.getId())
-                    .orElseThrow(() -> new EntityNotFoundException("Carpeta destino no encontrada"));
+            targetFolder =
+                    folderRepository
+                            .findByIdAndOwnerId(targetFolderId, owner.getId())
+                            .orElseThrow(
+                                    () ->
+                                            new EntityNotFoundException(
+                                                    "Carpeta destino no encontrada"));
         }
 
         metadata.setFolder(targetFolder);
         FileMetadata saved = fileMetadataRepository.save(metadata);
 
-        log.info("Archivo movido: id={}, destino={}, usuario={}",
-                fileId, targetFolderId != null ? targetFolderId : "raíz", owner.getId());
+        log.info(
+                "Archivo movido: id={}, destino={}, usuario={}",
+                fileId,
+                targetFolderId != null ? targetFolderId : "raíz",
+                owner.getId());
         return FileMetadataResponse.fromEntity(saved);
     }
 
-    /**
-     * Busca un archivo por ID y owner para su uso en compartición (sin filtro de deletedAt).
-     */
+    /** Busca un archivo por ID y owner para su uso en compartición (sin filtro de deletedAt). */
     @Transactional(readOnly = true)
     public FileMetadata findActiveById(UUID fileId, UUID ownerId) {
-        return fileMetadataRepository.findByIdAndOwnerIdAndDeletedAtIsNull(fileId, ownerId)
-                .orElseThrow(() -> new EntityNotFoundException("Archivo no encontrado con id: " + fileId));
+        return fileMetadataRepository
+                .findByIdAndOwnerIdAndDeletedAtIsNull(fileId, ownerId)
+                .orElseThrow(
+                        () ->
+                                new EntityNotFoundException(
+                                        "Archivo no encontrado con id: " + fileId));
     }
 
     /**
-     * Calcula el hash SHA-256 de un arreglo de bytes.
+     * Cuota de almacenamiento de cada usuario: la menor entre la configurada ({@code
+     * APP_STORAGE_QUOTA}) y el límite total de la licencia.
      *
-     * @param data los bytes del archivo
-     * @return representación hexadecimal del hash SHA-256
+     * @return cuota por usuario en bytes
      */
-    private String computeSha256(byte[] data) {
+    public long getUserQuota() {
+        return Math.min(userQuotaBytes, licenseValidatorService.getAllowedQuota());
+    }
+
+    /**
+     * Comprueba que caben {@code incomingBytes} más tanto en la cuota del usuario como en el límite
+     * global de la licencia. Los archivos en la papelera cuentan, porque siguen en disco.
+     *
+     * @throws StorageException si se supera alguno de los dos límites
+     */
+    private void checkQuota(User owner, long incomingBytes) {
+        long userUsed = fileMetadataRepository.sumFileSizeByOwnerId(owner.getId());
+        long userQuota = getUserQuota();
+        if (userUsed + incomingBytes > userQuota) {
+            log.warn(
+                    "Cuota de usuario excedida: usuario={}, solicitado={} bytes, usado={} bytes, cuota={} bytes",
+                    owner.getId(),
+                    incomingBytes,
+                    userUsed,
+                    userQuota);
+            throw new StorageException(
+                    "No hay suficiente espacio de almacenamiento disponible. Límite de "
+                            + formatFileSize(userQuota)
+                            + " excedido (la papelera también cuenta).");
+        }
+
+        long serverUsed = fileMetadataRepository.sumAllFileSize();
+        long licensedQuota = licenseValidatorService.getAllowedQuota();
+        if (serverUsed + incomingBytes > licensedQuota) {
+            log.warn(
+                    "Límite global de la licencia alcanzado: usado={} bytes, licencia={} bytes",
+                    serverUsed,
+                    licensedQuota);
+            throw new StorageException(
+                    "El servidor ha alcanzado el límite de almacenamiento de su licencia ("
+                            + formatFileSize(licensedQuota)
+                            + ").");
+        }
+    }
+
+    private static MessageDigest newSha256Digest() {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(data);
-            return HexFormat.of().formatHex(hash);
+            return MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
-            log.warn("SHA-256 no disponible, omitiendo checksum");
-            return null;
+            // Todas las JVM están obligadas a incluir SHA-256
+            throw new IllegalStateException("SHA-256 no disponible en esta JVM", e);
         }
     }
 

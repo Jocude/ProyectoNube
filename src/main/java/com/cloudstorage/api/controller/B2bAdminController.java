@@ -1,18 +1,26 @@
 package com.cloudstorage.api.controller;
 
 import com.cloudstorage.api.service.B2bAdminService;
+import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.HashMap;
-import java.util.Map;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Controlador REST para el panel de configuración B2B de administradores.
+ *
+ * <p>Además del JWT de usuario, cada operación exige la contraseña de administración B2B. Los
+ * intentos están limitados por IP en {@link com.cloudstorage.api.config.RateLimitFilter}.
  */
 @Slf4j
 @RestController
@@ -20,70 +28,61 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class B2bAdminController {
 
+    static final String ADMIN_PASSWORD_HEADER = "X-B2B-Admin-Password";
+
     private final B2bAdminService b2bAdminService;
 
-    /**
-     * Verifica si la contraseña de administrador B2B es correcta.
-     */
+    /** Verifica si la contraseña de administrador B2B es correcta. */
     @PostMapping("/verify")
-    public ResponseEntity<?> verifyPassword(@RequestBody PasswordRequest request) {
-        if (request.getPassword() == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Contraseña requerida"));
+    public ResponseEntity<Map<String, Object>> verifyPassword(
+            @RequestBody PasswordRequest request) {
+        if (!b2bAdminService.authenticate(request.getPassword())) {
+            return forbidden();
         }
-        
-        boolean ok = b2bAdminService.authenticate(request.getPassword());
-        if (ok) {
-            return ResponseEntity.ok(Map.of("success", true, "message", "Autenticación correcta"));
-        } else {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Contraseña de administrador B2B incorrecta"));
-        }
+        return ResponseEntity.ok(Map.of("success", true, "message", "Autenticación correcta"));
     }
 
-    /**
-     * Devuelve las variables configuradas actualmente en el archivo .env.
-     */
+    /** Devuelve la configuración visible (rutas y licencia; nunca secretos). */
     @GetMapping
-    public ResponseEntity<?> getConfig(@RequestHeader(value = "X-B2B-Admin-Password", defaultValue = "") String adminPassword) {
+    public ResponseEntity<Map<String, Object>> getConfig(
+            @RequestHeader(value = ADMIN_PASSWORD_HEADER, defaultValue = "") String adminPassword) {
         if (!b2bAdminService.authenticate(adminPassword)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Acceso denegado: Contraseña B2B incorrecta"));
+            return forbidden();
         }
-        
         try {
-            Map<String, String> config = b2bAdminService.readConfig();
-            // Creamos una copia filtrando el password B2B por seguridad (se gestiona aparte)
-            Map<String, String> editableConfig = new HashMap<>(config);
-            editableConfig.remove("B2B_ADMIN_PASSWORD");
-            return ResponseEntity.ok(editableConfig);
-        } catch (Exception e) {
+            return ResponseEntity.ok(new LinkedHashMap<>(b2bAdminService.readPublicConfig()));
+        } catch (IOException e) {
             log.error("Error al leer la configuración: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "No se pudo leer la configuración: " + e.getMessage()));
+                    .body(Map.of("error", "No se pudo leer la configuración"));
         }
     }
 
-    /**
-     * Guarda la nueva configuración .env y actualiza/valida parámetros en caliente.
-     */
+    /** Actualiza la licencia y/o la contraseña de administración. */
     @PostMapping
-    public ResponseEntity<?> updateConfig(
-            @RequestHeader(value = "X-B2B-Admin-Password", defaultValue = "") String adminPassword,
+    public ResponseEntity<Map<String, Object>> updateConfig(
+            @RequestHeader(value = ADMIN_PASSWORD_HEADER, defaultValue = "") String adminPassword,
             @RequestBody UpdateConfigRequest request) {
-        
         if (!b2bAdminService.authenticate(adminPassword)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Acceso denegado: Contraseña B2B incorrecta"));
+            return forbidden();
         }
-
         try {
-            b2bAdminService.updateConfig(request.getConfig(), adminPassword, request.getNewAdminPassword());
-            return ResponseEntity.ok(Map.of("success", true, "message", "Configuración actualizada correctamente en el archivo .env"));
+            b2bAdminService.updateConfig(request.getLicenseKey(), request.getNewAdminPassword());
+            return ResponseEntity.ok(
+                    Map.of("success", true, "message", "Configuración actualizada correctamente"));
         } catch (IllegalArgumentException e) {
             log.warn("Intento de guardado inválido: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            log.error("Error al actualizar la configuración .env: {}", e.getMessage());
+        } catch (IOException e) {
+            log.error("Error al actualizar el .env: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "No se pudo guardar la configuración: " + e.getMessage()));
+                    .body(Map.of("error", "No se pudo guardar la configuración"));
         }
+    }
+
+    private static ResponseEntity<Map<String, Object>> forbidden() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "Contraseña de administrador B2B incorrecta"));
     }
 
     @Data
@@ -93,7 +92,7 @@ public class B2bAdminController {
 
     @Data
     public static class UpdateConfigRequest {
-        private Map<String, String> config;
+        private String licenseKey;
         private String newAdminPassword;
     }
 }

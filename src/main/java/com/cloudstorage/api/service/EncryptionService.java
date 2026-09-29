@@ -2,30 +2,35 @@ package com.cloudstorage.api.service;
 
 import com.cloudstorage.api.exception.StorageException;
 import jakarta.annotation.PostConstruct;
+import java.io.FilterOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
+import java.util.Base64;
+import javax.crypto.Cipher;
+import javax.crypto.CipherOutputStream;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
-import java.security.SecureRandom;
-import java.util.Base64;
-
 /**
  * Servicio de cifrado y descifrado de archivos utilizando AES-256-GCM.
  *
- * <p>Proporciona cifrado autenticado con datos asociados (AEAD) mediante
- * el algoritmo AES en modo Galois/Counter (GCM), garantizando tanto la
- * confidencialidad como la integridad de los datos cifrados.</p>
+ * <p>Proporciona cifrado autenticado con datos asociados (AEAD) mediante el algoritmo AES en modo
+ * Galois/Counter (GCM), garantizando tanto la confidencialidad como la integridad de los datos
+ * cifrados.
  *
- * <p>El IV (Vector de Inicialización) de 12 bytes se genera aleatoriamente
- * para cada operación de cifrado y se antepone al texto cifrado resultante,
- * permitiendo su extracción durante el descifrado.</p>
+ * <p>El IV (Vector de Inicialización) de 12 bytes se genera aleatoriamente para cada operación de
+ * cifrado y se antepone al texto cifrado resultante, permitiendo su extracción durante el
+ * descifrado.
  *
- * <p>{@link SecureRandom} se reutiliza como campo de clase para mejorar el rendimiento,
- * ya que la instanciación repetida en cada llamada es innecesariamente costosa.</p>
+ * <p>{@link SecureRandom} se reutiliza como campo de clase para mejorar el rendimiento, ya que la
+ * instanciación repetida en cada llamada es innecesariamente costosa.
  *
  * @author Cloud Storage API
  * @version 1.0
@@ -49,17 +54,38 @@ public class EncryptionService {
     private SecretKey secretKey;
 
     /**
-     * Generador de números aleatorios seguro reutilizable.
-     * Declarado como campo de clase para evitar la costosa re-instanciación en cada cifrado.
+     * Generador de números aleatorios seguro reutilizable. Declarado como campo de clase para
+     * evitar la costosa re-instanciación en cada cifrado.
      */
     private final SecureRandom secureRandom = new SecureRandom();
 
+    /** Longitud exigida de la clave AES-256 en bytes. */
+    private static final int KEY_LENGTH_BYTES = 32;
+
     /**
      * Inicializa la clave secreta AES a partir de la clave codificada en Base64.
+     *
+     * @throws IllegalStateException si la clave falta, no es Base64 válido o no mide 32 bytes
      */
     @PostConstruct
     public void init() {
-        byte[] decodedKey = Base64.getDecoder().decode(encryptionKeyBase64);
+        if (encryptionKeyBase64 == null || encryptionKeyBase64.isBlank()) {
+            throw new IllegalStateException(
+                    "Falta la clave de cifrado: configure APP_ENCRYPTION_KEY (ENCRYPTION_KEY en .env)");
+        }
+        byte[] decodedKey;
+        try {
+            decodedKey = Base64.getDecoder().decode(encryptionKeyBase64.trim());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("La clave de cifrado no es Base64 válido", e);
+        }
+        if (decodedKey.length != KEY_LENGTH_BYTES) {
+            throw new IllegalStateException(
+                    "La clave de cifrado debe medir "
+                            + KEY_LENGTH_BYTES
+                            + " bytes (AES-256), mide "
+                            + decodedKey.length);
+        }
         this.secretKey = new SecretKeySpec(decodedKey, "AES");
         log.info("Servicio de cifrado inicializado correctamente con AES-256-GCM");
     }
@@ -67,8 +93,8 @@ public class EncryptionService {
     /**
      * Cifra un arreglo de bytes utilizando AES-256-GCM.
      *
-     * <p>El resultado contiene el IV (12 bytes) seguido del texto cifrado
-     * con la etiqueta de autenticación GCM adjunta.</p>
+     * <p>El resultado contiene el IV (12 bytes) seguido del texto cifrado con la etiqueta de
+     * autenticación GCM adjunta.
      *
      * @param data los datos en texto plano a cifrar
      * @return arreglo de bytes que contiene IV + texto cifrado + etiqueta GCM
@@ -95,8 +121,10 @@ public class EncryptionService {
             System.arraycopy(iv, 0, combined, 0, GCM_IV_LENGTH);
             System.arraycopy(encryptedData, 0, combined, GCM_IV_LENGTH, encryptedData.length);
 
-            log.debug("Archivo cifrado exitosamente. Tamaño original: {} bytes, tamaño cifrado: {} bytes",
-                    data.length, combined.length);
+            log.debug(
+                    "Archivo cifrado exitosamente. Tamaño original: {} bytes, tamaño cifrado: {} bytes",
+                    data.length,
+                    combined.length);
 
             return combined;
         } catch (Exception e) {
@@ -106,10 +134,54 @@ public class EncryptionService {
     }
 
     /**
+     * Cifra un flujo de datos con AES-256-GCM escribiendo el resultado en otro flujo, por bloques,
+     * sin cargar el archivo completo en memoria.
+     *
+     * <p>El formato de salida es idéntico al de {@link #encrypt(byte[])} (IV + texto cifrado +
+     * etiqueta GCM), por lo que se descifra con {@link #decrypt(byte[])}. No cierra los flujos.
+     *
+     * @param in datos en texto plano
+     * @param out destino de los datos cifrados
+     * @throws IOException si falla la lectura o la escritura
+     * @throws StorageException si falla la inicialización del cifrador
+     */
+    public void encrypt(InputStream in, OutputStream out) throws IOException {
+        Cipher cipher;
+        byte[] iv = new byte[GCM_IV_LENGTH];
+        try {
+            secureRandom.nextBytes(iv);
+            cipher = Cipher.getInstance(ALGORITHM);
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
+        } catch (GeneralSecurityException e) {
+            log.error("Error al inicializar el cifrador: {}", e.getMessage(), e);
+            throw new StorageException("Error al cifrar el archivo");
+        }
+        out.write(iv);
+        // CipherOutputStream cifra cada bloque al escribirlo; al cerrarlo añade la etiqueta GCM.
+        // Se envuelve 'out' para que cerrar el CipherOutputStream no cierre el flujo del llamador.
+        try (OutputStream cipherOut =
+                new CipherOutputStream(
+                        new FilterOutputStream(out) {
+                            @Override
+                            public void write(byte[] b, int off, int len) throws IOException {
+                                out.write(b, off, len);
+                            }
+
+                            @Override
+                            public void close() throws IOException {
+                                flush();
+                            }
+                        },
+                        cipher)) {
+            in.transferTo(cipherOut);
+        }
+    }
+
+    /**
      * Descifra un arreglo de bytes previamente cifrado con AES-256-GCM.
      *
-     * <p>Espera que los primeros 12 bytes del arreglo de entrada sean el IV,
-     * seguidos del texto cifrado con la etiqueta GCM.</p>
+     * <p>Espera que los primeros 12 bytes del arreglo de entrada sean el IV, seguidos del texto
+     * cifrado con la etiqueta GCM.
      *
      * @param encryptedData los datos cifrados (IV + texto cifrado + etiqueta GCM)
      * @return los datos descifrados en texto plano
@@ -136,8 +208,10 @@ public class EncryptionService {
             // Descifrar los datos
             byte[] decryptedData = cipher.doFinal(ciphertext);
 
-            log.debug("Archivo descifrado exitosamente. Tamaño cifrado: {} bytes, tamaño descifrado: {} bytes",
-                    encryptedData.length, decryptedData.length);
+            log.debug(
+                    "Archivo descifrado exitosamente. Tamaño cifrado: {} bytes, tamaño descifrado: {} bytes",
+                    encryptedData.length,
+                    decryptedData.length);
 
             return decryptedData;
         } catch (Exception e) {

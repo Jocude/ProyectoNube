@@ -22,22 +22,32 @@ spring:
     show-sql: false
 
   # --- Configuración de Multipart (subida de archivos) ---
+  # Los archivos se cifran en streaming, pero la descarga aún se descifra en memoria:
+  # no subir este límite por encima de lo que admita la RAM del contenedor.
   servlet:
     multipart:
-      max-file-size: -1
-      max-request-size: -1
+      max-file-size: ${APP_MAX_FILE_SIZE:512MB}
+      max-request-size: ${APP_MAX_FILE_SIZE:512MB}
 
 # --- Configuración de la Aplicación ---
 app:
   jwt:
-    secret: ${APP_JWT_SECRET:defaultJwtSecretKeyThatShouldBeChangedInProduction2024!}
+    # Obligatorio: sin valor por defecto (la app no arranca si falta)
+    secret: ${APP_JWT_SECRET:}
     expiration-ms: 86400000  # 24 horas en milisegundos
   encryption:
-    key: "${APP_ENCRYPTION_KEY:dGhpcyBpcyBhIDMyIGJ5dGUga2V5ISEhMTIzNDU2Nzg=}"
+    # Obligatorio: 32 bytes en Base64, sin valor por defecto
+    key: ${APP_ENCRYPTION_KEY:}
   storage:
     location: ${APP_STORAGE_LOCATION:./uploads}
-    quota-bytes: ${APP_STORAGE_QUOTA:5368709120}  # 5 GB por defecto
+    quota-bytes: ${APP_STORAGE_QUOTA:5368709120}  # 5 GB por usuario (nunca más que la licencia)
   license-key: ${APP_LICENSE_KEY:}
+  registration:
+    # false: solo se puede registrar el primer usuario (el propietario)
+    enabled: ${APP_REGISTRATION_ENABLED:true}
+  rate-limit:
+    # Host del proxy cuyas cabeceras CF-Connecting-IP/X-Forwarded-For son de fiar (vacío = ninguno)
+    trusted-proxy-host: ${APP_TRUSTED_PROXY_HOST:}
 
 # --- Configuración del Servidor ---
 server:
@@ -76,5 +86,5 @@ springdoc:
 # --- Configuración de Logging ---
 logging:
   level:
-    com.cloudstorage: DEBUG
+    com.cloudstorage: ${APP_LOG_LEVEL:INFO}
     org.springframework.security: INFO
