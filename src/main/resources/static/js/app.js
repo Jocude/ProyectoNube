@@ -447,10 +447,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Al seleccionar un archivo mediante el input
   fileInput.addEventListener('change', () => {
-    if (fileInput.files && fileInput.files[0]) {
-      uploadFile(fileInput.files[0]);
+    if (fileInput.files && fileInput.files.length > 0) {
+      // Copiar la lista antes de resetear el input (al resetearlo se vacía)
+      const files = [...fileInput.files];
       // Resetear el input para permitir subir el mismo archivo otra vez
       fileInput.value = '';
+      uploadFiles(files);
     }
   });
 
@@ -479,72 +481,91 @@ document.addEventListener('DOMContentLoaded', () => {
     e.stopPropagation();
     uploadZone.classList.remove('drag-over');
 
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      uploadFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      uploadFiles([...e.dataTransfer.files]);
     }
   });
+
+  /**
+   * Sube varios archivos uno detrás de otro (comparten la barra de progreso).
+   * @param {File[]} files - Los archivos a subir.
+   */
+  async function uploadFiles(files) {
+    for (const file of files) {
+      const ok = await uploadFile(file);
+      if (!ok && !getToken()) break; // sesión caducada: no seguir intentando
+    }
+  }
 
   /**
    * Sube un archivo al servidor usando XMLHttpRequest para
    * poder rastrear el progreso de la subida.
    * @param {File} file - El archivo a subir.
+   * @returns {Promise<boolean>} true si la subida terminó bien.
    */
   function uploadFile(file) {
-    const token = getToken();
-    if (!token) {
-      autoLogout();
-      return;
-    }
-
-    // Mostrar barra de progreso
-    uploadProgress.classList.remove('hidden');
-    updateProgress(0);
-
-    const formData = new FormData();
-    formData.append('file', file);
-    if (currentFolderId) {
-      formData.append('folderId', currentFolderId);
-    }
-
-    const xhr = new XMLHttpRequest();
-
-    // Seguimiento del progreso de subida
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        const percent = Math.round((e.loaded / e.total) * 100);
-        updateProgress(percent);
-      }
-    };
-
-    // Subida completada
-    xhr.onload = () => {
-      uploadProgress.classList.add('hidden');
-
-      if (xhr.status >= 200 && xhr.status < 300) {
-        showToast(`${file.name} subido correctamente`, 'success');
-        loadFiles();
-      } else if (xhr.status === 401) {
+    return new Promise((resolve) => {
+      const token = getToken();
+      if (!token) {
         autoLogout();
-      } else {
-        let errorMsg = 'Error al subir el archivo';
-        try {
-          const resp = JSON.parse(xhr.responseText);
-          if (resp.error) errorMsg = resp.error;
-        } catch (_) { /* ignorar error de parseo */ }
-        showToast(errorMsg, 'error');
+        resolve(false);
+        return;
       }
-    };
 
-    // Error de red
-    xhr.onerror = () => {
-      uploadProgress.classList.add('hidden');
-      showToast('Error de conexión al subir el archivo', 'error');
-    };
+      // Mostrar barra de progreso
+      uploadProgress.classList.remove('hidden');
+      updateProgress(0);
 
-    xhr.open('POST', `${API_BASE}/files/upload`);
-    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    xhr.setRequestHeader('X-Pinggy-No-Screen', 'true');
-    xhr.send(formData);
+      const formData = new FormData();
+      formData.append('file', file);
+      if (currentFolderId) {
+        formData.append('folderId', currentFolderId);
+      }
+
+      const xhr = new XMLHttpRequest();
+
+      // Seguimiento del progreso de subida
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          updateProgress(percent);
+        }
+      };
+
+      // Subida completada
+      xhr.onload = () => {
+        uploadProgress.classList.add('hidden');
+
+        if (xhr.status >= 200 && xhr.status < 300) {
+          showToast(`${file.name} subido correctamente`, 'success');
+          loadFiles();
+          resolve(true);
+          return;
+        }
+        if (xhr.status === 401) {
+          autoLogout();
+        } else {
+          let errorMsg = 'Error al subir el archivo';
+          try {
+            const resp = JSON.parse(xhr.responseText);
+            if (resp.error) errorMsg = resp.error;
+          } catch (_) { /* ignorar error de parseo */ }
+          showToast(`${file.name}: ${errorMsg}`, 'error');
+        }
+        resolve(false);
+      };
+
+      // Error de red
+      xhr.onerror = () => {
+        uploadProgress.classList.add('hidden');
+        showToast(`Error de conexión al subir ${file.name}`, 'error');
+        resolve(false);
+      };
+
+      xhr.open('POST', `${API_BASE}/files/upload`);
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.send(formData);
+    });
   }
 
   /**
@@ -575,10 +596,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const response = await fetch(`${API_BASE}/files/download/${fileId}`, {
-        headers: { 
-            'Authorization': `Bearer ${token}`,
-            'X-Pinggy-No-Screen': 'true'
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (response.status === 401) {
@@ -763,12 +781,12 @@ document.addEventListener('DOMContentLoaded', () => {
   async function apiRequest(url, options = {}) {
     const token = getToken();
 
-    // Preparar headers con autorización si hay token
-    const headers = { 
-        'Authorization': `Bearer ${token}`,
+    // Preparar headers con autorización solo si hay token
+    // (antes se enviaba "Bearer null" en login, registro y /api/info)
+    const headers = {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         'Content-Type': 'application/json',
-        'X-Pinggy-No-Screen': 'true',
-        ...(options.headers || {}) 
+        ...(options.headers || {})
     };
 
     const response = await fetch(url, {

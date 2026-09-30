@@ -29,6 +29,9 @@ export APP_UID APP_GID
 APP_UID=$(id -u)
 APP_GID=$(id -g)
 
+# La URL de un arranque anterior ya no es válida (el túnel genera una nueva cada vez)
+rm -f "$HOST_STORAGE_PATH/public_url.txt"
+
 echo "Levantando los servicios en segundo plano..."
 docker compose up -d --build
 
