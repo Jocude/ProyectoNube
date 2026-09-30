@@ -43,7 +43,9 @@ public interface FileMetadataRepository extends JpaRepository<FileMetadata, UUID
     @Query(
             "SELECT f FROM FileMetadata f WHERE f.owner.id = :ownerId "
                     + "AND f.deletedAt IS NULL "
-                    + "AND (:search IS NULL OR LOWER(f.originalName) LIKE LOWER(CONCAT('%', :search, '%'))) "
+                    // search nunca es null (vacío = todos): con null, PostgreSQL no puede
+                    // deducir el tipo del parámetro y la consulta falla
+                    + "AND LOWER(f.originalName) LIKE LOWER(CONCAT('%', :search, '%')) "
                     + "ORDER BY f.uploadedAt DESC")
     Page<FileMetadata> findByOwnerIdAndSearchTerm(UUID ownerId, String search, Pageable pageable);
 

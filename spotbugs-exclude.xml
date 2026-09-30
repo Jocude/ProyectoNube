@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Avisos de SpotBugs revisados y aceptados a propósito. Cada exclusión es lo más
+  concreta posible (clase + patrón) para no ocultar avisos nuevos.
+-->
+<FindBugsFilter>
+    <!--
+      Records internos que transportan los bytes de un archivo entre servicio y
+      controlador. Copiar el array en cada acceso duplicaría en memoria archivos de
+      cientos de MB sin ninguna ventaja: no salen de la aplicación.
+    -->
+    <Match>
+        <Or>
+            <Class name="com.cloudstorage.api.service.FileStorageService$LoadedFile"/>
+            <Class name="com.cloudstorage.api.service.ShareService$SharedFileResult"/>
+        </Or>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
+    <!-- Sin licencia válida la aplicación debe detenerse por completo al arrancar. -->
+    <Match>
+        <Class name="com.cloudstorage.api.service.LicenseValidatorService"/>
+        <Bug pattern="DM_EXIT"/>
+    </Match>
+
+    <!--
+      User implementa UserDetails (Serializable) y tiene una colección JPA. Marcarla
+      'transient' haría que JPA la ignorase; la entidad nunca se serializa con Java.
+    -->
+    <Match>
+        <Class name="com.cloudstorage.api.entity.User"/>
+        <Bug pattern="SE_BAD_FIELD"/>
+    </Match>
+</FindBugsFilter>

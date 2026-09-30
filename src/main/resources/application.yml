@@ -13,13 +13,20 @@ spring:
     password: cloudstorage
 
   # --- Configuración de JPA/Hibernate ---
+  # El esquema lo gestiona Flyway (src/main/resources/db/migration); Hibernate solo
+  # comprueba al arrancar que las entidades coinciden con las tablas.
   jpa:
     hibernate:
-      ddl-auto: update
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+      ddl-auto: validate
+    # Sin consultas a la BD mientras se genera la respuesta HTTP (evita consultas ocultas)
+    open-in-view: false
     show-sql: false
+
+  # --- Migraciones (Flyway) ---
+  flyway:
+    # Las BD creadas antes de Flyway (por Hibernate) se marcan como versión 1 sin tocarlas
+    baseline-on-migrate: true
+    baseline-version: 1
 
   # --- Configuración de Multipart (subida de archivos) ---
   # Los archivos se cifran en streaming, pero la descarga aún se descifra en memoria:

@@ -1,0 +1,36 @@
+# Integración continua: en cada push y pull request compila, ejecuta los tests
+# (unitarios e integración con H2), comprueba el formato (Spotless) y hace
+# análisis estático (SpotBugs). Todo ello lo hace `mvn verify`.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Compilar, tests, formato y análisis estático
+        run: mvn -B verify
+
+      - name: Guardar informes de tests si fallan
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/

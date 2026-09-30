@@ -1,12 +1,13 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
     username: sa
     password:
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      # Igual que en producción: Flyway crea el esquema y Hibernate lo valida
+      ddl-auto: validate
     database-platform: org.hibernate.dialect.H2Dialect
     show-sql: false
   servlet:
@@ -23,6 +24,7 @@ app:
   storage:
     location: ./test-uploads
     quota-bytes: 10737418240
+  # Licencia de prueba: caduca el 2027-07-02. ApiIntegrationTest no la usa (mockea LicenseValidatorService).
   license-key: eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJFbXByZXNhIGRlIFBydWViYSBTLkEuIiwiaXNzIjoiQ2xvdWRTdG9yYWdlIEIyQiBQcm92aWRlciIsImlhdCI6MTc4Mjk1NTQwOSwiZXhwIjoxODE0NDkxNDA5LCJxdW90YUJ5dGVzIjo1MzY4NzA5MTIwMH0.j6cAV7lNAa9o_neGvVh75-oAYouWrV7eg07YUUF_FAe2liRjUU6vKOHb_mf-0rTXagUAXmp-dIDtyxi3NkqQP-xxwGupQobMzfgK_dr_N8bScE0LlmvBzw4mPpbELGM-ot0AT9ixWX9X5DTxo7HWhVMCcgBU-1Qed76HGg9AG2rYtJ8m0KsaFu2BONFL9k8lRPfWeJtp47j9b5o8EWhD9MwDVYj36YK9yWNe-lZaUELpUR5Kvi9UQHSad-80urc-cwtzb7ZhXHlzHplbGQS4TTvupeyHaBAMwXr99aJDq7SSQCNks4foFOFlCX0Cu21vY5WopLroq9aheiHYvicOGQ
 
 logging:

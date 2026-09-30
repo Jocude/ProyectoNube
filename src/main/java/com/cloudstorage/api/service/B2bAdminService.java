@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
@@ -51,14 +52,14 @@ public class B2bAdminService {
     private final LicenseValidatorService licenseValidatorService;
 
     /**
-     * Resuelve la ruta del archivo .env activo (montado en el contenedor o local en desarrollo).
+     * Ruta del archivo .env. Por defecto {@code .env} relativo al directorio de trabajo: en Docker
+     * es {@code /app}, donde docker-compose monta el .env del host.
      */
+    @Value("${app.env-file:.env}")
+    private String envFile;
+
     private Path getEnvFilePath() {
-        Path envInContainer = Path.of("/app/.env");
-        if (Files.exists(envInContainer)) {
-            return envInContainer;
-        }
-        return Path.of(".env");
+        return Path.of(envFile);
     }
 
     /** Lee las variables del .env tal cual, sin valores por defecto. */

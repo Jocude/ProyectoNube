@@ -410,7 +410,7 @@ public class FileStorageService {
         Page<FileMetadata> files =
                 fileMetadataRepository.findByOwnerIdAndSearchTerm(
                         owner.getId(),
-                        (search == null || search.isBlank()) ? null : search,
+                        (search == null || search.isBlank()) ? "" : search.trim(),
                         pageable);
 
         log.debug(

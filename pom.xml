@@ -55,6 +55,16 @@
             <version>${springdoc.version}</version>
         </dependency>
 
+        <!-- Migraciones de esquema de base de datos -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
         <!-- Base de datos PostgreSQL -->
         <dependency>
             <groupId>org.postgresql</groupId>
@@ -136,6 +146,14 @@
                         <removeUnusedImports/>
                     </java>
                 </configuration>
+                <!-- mvn verify falla si hay código sin formatear -->
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <!-- SpotBugs — análisis estático de bugs probables (mvn compile spotbugs:check) -->
             <plugin>
@@ -145,7 +163,16 @@
                 <configuration>
                     <effort>Max</effort>
                     <threshold>Medium</threshold>
+                    <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
                 </configuration>
+                <!-- mvn verify falla si SpotBugs encuentra avisos nuevos -->
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
