@@ -6,9 +6,11 @@ import com.cloudstorage.api.dto.FolderResponse;
 import com.cloudstorage.api.entity.FileMetadata;
 import com.cloudstorage.api.entity.Folder;
 import com.cloudstorage.api.entity.User;
+import com.cloudstorage.api.exception.ConflictException;
 import com.cloudstorage.api.repository.FileMetadataRepository;
 import com.cloudstorage.api.repository.FolderRepository;
 import jakarta.persistence.EntityNotFoundException;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -36,17 +38,7 @@ public class FolderService {
             throw new IllegalArgumentException("El nombre de la carpeta no puede estar vacío");
         }
 
-        boolean exists =
-                (parentId == null)
-                        ? folderRepository.existsByNameAndOwnerIdAndParentIsNull(
-                                cleanName, owner.getId())
-                        : folderRepository.existsByNameAndOwnerIdAndParentId(
-                                cleanName, owner.getId(), parentId);
-
-        if (exists) {
-            throw new IllegalArgumentException(
-                    "Ya existe una carpeta con el nombre '" + cleanName + "' en esta ubicación");
-        }
+        ensureNameIsFree(cleanName, parentId, owner);
 
         Folder parent = null;
         if (parentId != null) {
@@ -83,6 +75,10 @@ public class FolderService {
         String cleanName = newName.trim();
         if (cleanName.isEmpty()) {
             throw new IllegalArgumentException("El nombre de la carpeta no puede estar vacío");
+        }
+        if (!cleanName.equals(folder.getName())) {
+            UUID parentId = folder.getParent() != null ? folder.getParent().getId() : null;
+            ensureNameIsFree(cleanName, parentId, owner);
         }
 
         folder.setName(cleanName);
@@ -176,14 +172,36 @@ public class FolderService {
             deleteFolderRecursively(sub, owner);
         }
 
+        // Incluye los archivos que ya estaban en la papelera: todos se desvinculan de la carpeta
+        // (si no, la clave foránea impediría borrarla) y los activos pasan a la papelera.
+        // Al restaurarlos desde la papelera aparecerán en la raíz.
         List<FileMetadata> files =
                 fileMetadataRepository.findByOwnerIdAndFolderIdOrderByUploadedAtDesc(
                         owner.getId(), folder.getId());
+        LocalDateTime now = LocalDateTime.now();
         for (FileMetadata file : files) {
-            fileStorageService.delete(file.getId(), owner);
+            if (file.getDeletedAt() == null) {
+                file.setDeletedAt(now);
+            }
+            file.setFolder(null);
         }
+        fileMetadataRepository.saveAll(files);
 
         folderRepository.delete(folder);
         log.info("Carpeta eliminada: id={}, nombre='{}'", folder.getId(), folder.getName());
+    }
+
+    /** Lanza 409 si ya hay una carpeta con ese nombre en la misma ubicación. */
+    private void ensureNameIsFree(String name, UUID parentId, User owner) {
+        boolean exists =
+                (parentId == null)
+                        ? folderRepository.existsByNameAndOwnerIdAndParentIsNull(
+                                name, owner.getId())
+                        : folderRepository.existsByNameAndOwnerIdAndParentId(
+                                name, owner.getId(), parentId);
+        if (exists) {
+            throw new ConflictException(
+                    "Ya existe una carpeta con el nombre '" + name + "' en esta ubicación");
+        }
     }
 }

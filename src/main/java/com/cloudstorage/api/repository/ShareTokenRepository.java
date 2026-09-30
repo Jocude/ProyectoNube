@@ -2,6 +2,8 @@ package com.cloudstorage.api.repository;
 
 import com.cloudstorage.api.entity.ShareToken;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -40,4 +42,13 @@ public interface ShareTokenRepository extends JpaRepository<ShareToken, UUID> {
      * @return lista de tokens del archivo
      */
     List<ShareToken> findByFileIdAndOwnerId(UUID fileId, UUID ownerId);
+
+    /**
+     * Borra todos los enlaces de compartición de un archivo (antes de borrarlo definitivamente).
+     *
+     * @param fileId el UUID del archivo
+     */
+    @Modifying
+    @Query("DELETE FROM ShareToken s WHERE s.file.id = :fileId")
+    void deleteByFileId(UUID fileId);
 }

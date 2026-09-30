@@ -4,7 +4,7 @@ import com.cloudstorage.api.dto.ShareTokenResponse;
 import com.cloudstorage.api.entity.FileMetadata;
 import com.cloudstorage.api.entity.ShareToken;
 import com.cloudstorage.api.entity.User;
-import com.cloudstorage.api.exception.StorageException;
+import com.cloudstorage.api.exception.ShareLinkExpiredException;
 import com.cloudstorage.api.repository.ShareTokenRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -81,7 +81,13 @@ public class ShareService {
 
         if (!shareToken.isValid()) {
             log.warn("Intento de descarga con token inválido o expirado: tokenId={}", shareToken.getId());
-            throw new StorageException("Este enlace de compartición ha expirado o ha alcanzado el límite de descargas");
+            throw new ShareLinkExpiredException(
+                    "Este enlace de compartición ha expirado o ha alcanzado el límite de descargas");
+        }
+
+        // Un archivo en la papelera deja de estar disponible por sus enlaces
+        if (shareToken.getFile().getDeletedAt() != null) {
+            throw new ShareLinkExpiredException("El archivo compartido ya no está disponible");
         }
 
         byte[] data = fileStorageService.loadDecryptedBytes(shareToken.getFile());
@@ -117,12 +123,10 @@ public class ShareService {
      */
     @Transactional
     public void revokeShareLink(UUID shareId, User owner) {
+        // Un enlace ajeno se trata igual que uno inexistente, para no revelar que existe
         ShareToken token = shareTokenRepository.findById(shareId)
+                .filter(t -> t.getOwner().getId().equals(owner.getId()))
                 .orElseThrow(() -> new EntityNotFoundException("Enlace no encontrado: " + shareId));
-
-        if (!token.getOwner().getId().equals(owner.getId())) {
-            throw new SecurityException("No tienes permiso para revocar este enlace");
-        }
 
         shareTokenRepository.delete(token);
         log.info("Enlace de compartición revocado: tokenId={}, usuario={}", shareId, owner.getEmail());

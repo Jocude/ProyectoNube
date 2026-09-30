@@ -4,9 +4,12 @@ import com.cloudstorage.api.dto.FileMetadataResponse;
 import com.cloudstorage.api.entity.FileMetadata;
 import com.cloudstorage.api.entity.Folder;
 import com.cloudstorage.api.entity.User;
+import com.cloudstorage.api.exception.ConflictException;
+import com.cloudstorage.api.exception.QuotaExceededException;
 import com.cloudstorage.api.exception.StorageException;
 import com.cloudstorage.api.repository.FileMetadataRepository;
 import com.cloudstorage.api.repository.FolderRepository;
+import com.cloudstorage.api.repository.ShareTokenRepository;
 import jakarta.annotation.PostConstruct;
 import jakarta.persistence.EntityNotFoundException;
 import java.io.BufferedOutputStream;
@@ -31,6 +34,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -53,6 +58,7 @@ public class FileStorageService {
 
     private final FileMetadataRepository fileMetadataRepository;
     private final FolderRepository folderRepository;
+    private final ShareTokenRepository shareTokenRepository;
     private final EncryptionService encryptionService;
     private final FileValidationService fileValidationService;
     private final LicenseValidatorService licenseValidatorService;
@@ -163,6 +169,8 @@ public class FileStorageService {
                 throw e;
             }
             String checksum = HexFormat.of().formatHex(sha256.digest());
+            // Si la transacción no llega a confirmarse, el archivo de disco sobra
+            deleteFromDiskUnlessCommitted(targetPath);
 
             // Calcular ruta relativa para almacenar en base de datos
             String relativePath = rootLocation.relativize(targetPath).toString();
@@ -335,7 +343,7 @@ public class FileStorageService {
                                                 "Archivo no encontrado con id: " + fileId));
 
         if (metadata.getDeletedAt() == null) {
-            throw new IllegalStateException("El archivo no está en la papelera");
+            throw new ConflictException("El archivo no está en la papelera");
         }
 
         metadata.setDeletedAt(null);
@@ -369,29 +377,19 @@ public class FileStorageService {
                                                 "Archivo no encontrado con id: " + fileId));
 
         if (metadata.getDeletedAt() == null) {
-            throw new IllegalStateException(
+            throw new ConflictException(
                     "El archivo debe estar en la papelera antes de eliminarse definitivamente");
         }
 
-        try {
-            Path filePath = rootLocation.resolve(metadata.getStoredPath()).normalize();
-            boolean deleted = Files.deleteIfExists(filePath);
-            if (deleted) {
-                log.info("Archivo eliminado físicamente del disco: '{}'", filePath);
-            } else {
-                log.warn("El archivo no existía en disco: '{}'", filePath);
-            }
-        } catch (IOException e) {
-            log.error(
-                    "Error de E/S al eliminar físicamente el archivo '{}': {}",
-                    metadata.getOriginalName(),
-                    e.getMessage(),
-                    e);
-            throw new StorageException(
-                    "Error al eliminar el archivo: " + metadata.getOriginalName());
-        }
-
+        // Primero la BD: los enlaces compartidos apuntan al archivo (clave foránea)
+        shareTokenRepository.deleteByFileId(metadata.getId());
         fileMetadataRepository.delete(metadata);
+
+        // El disco se borra solo cuando la BD ha confirmado el borrado; si algo fallara antes,
+        // el archivo sigue intacto y consistente con sus metadatos.
+        Path filePath = rootLocation.resolve(metadata.getStoredPath()).normalize();
+        fileValidationService.validateStoragePath(filePath, rootLocation);
+        deleteFromDiskAfterCommit(filePath);
         log.info(
                 "Archivo eliminado definitivamente: id={}, nombre='{}', usuario={}",
                 fileId,
@@ -563,7 +561,7 @@ public class FileStorageService {
                     incomingBytes,
                     userUsed,
                     userQuota);
-            throw new StorageException(
+            throw new QuotaExceededException(
                     "No hay suficiente espacio de almacenamiento disponible. Límite de "
                             + formatFileSize(userQuota)
                             + " excedido (la papelera también cuenta).");
@@ -576,10 +574,57 @@ public class FileStorageService {
                     "Límite global de la licencia alcanzado: usado={} bytes, licencia={} bytes",
                     serverUsed,
                     licensedQuota);
-            throw new StorageException(
+            throw new QuotaExceededException(
                     "El servidor ha alcanzado el límite de almacenamiento de su licencia ("
                             + formatFileSize(licensedQuota)
                             + ").");
+        }
+    }
+
+    /** Borra el archivo de disco si la transacción actual termina sin confirmarse. */
+    private void deleteFromDiskUnlessCommitted(Path path) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCompletion(int status) {
+                        if (status != STATUS_COMMITTED) {
+                            deleteQuietly(path);
+                        }
+                    }
+                });
+    }
+
+    /** Borra el archivo de disco cuando la transacción actual se confirme (o ya, si no hay). */
+    private void deleteFromDiskAfterCommit(Path path) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            deleteQuietly(path);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        deleteQuietly(path);
+                    }
+                });
+    }
+
+    /**
+     * Borra un archivo sin propagar errores: un archivo huérfano en disco no es grave, pero un
+     * fallo aquí no debe deshacer una operación que la BD ya ha confirmado.
+     */
+    private static void deleteQuietly(Path path) {
+        try {
+            if (Files.deleteIfExists(path)) {
+                log.info("Archivo eliminado del disco: '{}'", path);
+            } else {
+                log.warn("El archivo no existía en disco: '{}'", path);
+            }
+        } catch (IOException e) {
+            log.error("No se pudo borrar el archivo '{}' del disco: {}", path, e.getMessage());
         }
     }
 

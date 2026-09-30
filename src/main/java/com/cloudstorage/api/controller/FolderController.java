@@ -1,5 +1,7 @@
 package com.cloudstorage.api.controller;
 
+import com.cloudstorage.api.dto.RenameRequest;
+import jakarta.validation.Valid;
 import com.cloudstorage.api.dto.CreateFolderRequest;
 import com.cloudstorage.api.dto.FolderContentsResponse;
 import com.cloudstorage.api.dto.FolderResponse;
@@ -35,7 +37,7 @@ public class FolderController {
     @Operation(summary = "Crear carpeta")
     @PostMapping
     public ResponseEntity<FolderResponse> createFolder(
-            @RequestBody CreateFolderRequest request,
+            @Valid @RequestBody CreateFolderRequest request,
             @AuthenticationPrincipal User currentUser) {
 
         log.info("Crear carpeta: nombre='{}', parentId={}, usuario={}",
@@ -52,13 +54,10 @@ public class FolderController {
     @PatchMapping("/{id}/rename")
     public ResponseEntity<FolderResponse> renameFolder(
             @PathVariable UUID id,
-            @RequestBody Map<String, String> body,
+            @Valid @RequestBody RenameRequest body,
             @AuthenticationPrincipal User currentUser) {
 
-        String newName = body.get("name");
-        if (newName == null || newName.isBlank()) {
-            return ResponseEntity.badRequest().build();
-        }
+        String newName = body.getName();
 
         log.info("Renombrar carpeta: id={}, nuevoNombre='{}', usuario={}", id, newName, currentUser.getEmail());
         FolderResponse response = folderService.renameFolder(id, newName, currentUser);

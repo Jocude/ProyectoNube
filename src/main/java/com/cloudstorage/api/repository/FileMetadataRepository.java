@@ -98,4 +98,10 @@ public interface FileMetadataRepository extends JpaRepository<FileMetadata, UUID
 
     /** Mantiene compatibilidad para la consulta de archivos en raíz — incluida en FolderService. */
     List<FileMetadata> findByOwnerIdAndFolderIsNullOrderByUploadedAtDesc(UUID ownerId);
+
+    /** Número de archivos activos (fuera de la papelera) en todo el servidor. */
+    long countByDeletedAtIsNull();
+
+    /** Número de archivos en la papelera en todo el servidor. */
+    long countByDeletedAtIsNotNull();
 }

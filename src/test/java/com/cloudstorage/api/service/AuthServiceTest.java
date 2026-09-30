@@ -12,6 +12,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.cloudstorage.api.exception.ConflictException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -78,7 +80,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("Registro con email duplicado lanza RuntimeException")
+    @DisplayName("Registro con email duplicado lanza ConflictException (409)")
     void registerDuplicateEmail() {
         when(userRepository.existsByEmail(EMAIL)).thenReturn(true);
 
@@ -88,7 +90,7 @@ class AuthServiceTest {
         req.setPassword(PASSWORD);
 
         assertThatThrownBy(() -> authService.register(req))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("ya está registrado");
     }
 
@@ -105,7 +107,7 @@ class AuthServiceTest {
 
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
         when(jwtService.generateToken(user)).thenReturn("valid-token");
-        when(userRepository.save(any())).thenReturn(user);
+        // Sin intentos fallidos previos no hay nada que guardar: no se prepara save()
 
         LoginRequest req = new LoginRequest();
         req.setEmail(EMAIL);
@@ -117,7 +119,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("Login con contraseña incorrecta lanza RuntimeException")
+    @DisplayName("Login con contraseña incorrecta lanza BadCredentialsException (401)")
     void loginInvalidPassword() {
         User user = User.builder()
                 .id(UUID.randomUUID())
@@ -134,7 +136,7 @@ class AuthServiceTest {
         req.setPassword("wrong-password");
 
         assertThatThrownBy(() -> authService.login(req))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(BadCredentialsException.class)
                 .hasMessageContaining("Credenciales inválidas");
     }
 
@@ -180,5 +182,39 @@ class AuthServiceTest {
                 .isInstanceOf(RuntimeException.class);
 
         verify(userRepository).save(argThat(u -> u.getLockedUntil() != null));
+    }
+
+    @Test
+    @DisplayName("Login con email inexistente lanza el mismo error que una contraseña incorrecta")
+    void loginUnknownEmail() {
+        when(userRepository.findByEmail("nadie@example.com")).thenReturn(Optional.empty());
+
+        LoginRequest req = new LoginRequest();
+        req.setEmail("nadie@example.com");
+        req.setPassword(PASSWORD);
+
+        assertThatThrownBy(() -> authService.login(req))
+                .isInstanceOf(BadCredentialsException.class)
+                .hasMessage("Credenciales inválidas");
+    }
+
+    @Test
+    @DisplayName("El email se normaliza (minúsculas y sin espacios) al registrar y al iniciar sesión")
+    void emailIsNormalized() {
+        User user = User.builder()
+                .id(UUID.randomUUID())
+                .name("Test User")
+                .email(EMAIL)
+                .password(ENCODED_PASSWORD)
+                .failedLoginAttempts(0)
+                .build();
+        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+        when(jwtService.generateToken(user)).thenReturn("valid-token");
+
+        LoginRequest req = new LoginRequest();
+        req.setEmail("  Test@Example.COM ");
+        req.setPassword(PASSWORD);
+
+        assertThat(authService.login(req).getToken()).isEqualTo("valid-token");
     }
 }

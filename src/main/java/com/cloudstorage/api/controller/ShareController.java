@@ -1,5 +1,7 @@
 package com.cloudstorage.api.controller;
 
+import com.cloudstorage.api.dto.CreateShareRequest;
+import jakarta.validation.Valid;
 import com.cloudstorage.api.dto.ShareTokenResponse;
 import com.cloudstorage.api.entity.User;
 import com.cloudstorage.api.service.ShareService;
@@ -50,16 +52,13 @@ public class ShareController {
     @PostMapping("/files/{fileId}")
     public ResponseEntity<ShareTokenResponse> createShareLink(
             @PathVariable UUID fileId,
-            @RequestBody Map<String, Object> body,
+            @Valid @RequestBody(required = false) CreateShareRequest body,
             @AuthenticationPrincipal User currentUser) {
 
-        int expirationHours = body.containsKey("expirationHours")
-                ? ((Number) body.get("expirationHours")).intValue()
-                : 24;
-
-        Integer maxDownloads = body.containsKey("maxDownloads") && body.get("maxDownloads") != null
-                ? ((Number) body.get("maxDownloads")).intValue()
-                : null;
+        // Sin cuerpo se usan los valores por defecto (24 h, descargas ilimitadas)
+        CreateShareRequest request = body != null ? body : new CreateShareRequest();
+        int expirationHours = request.getExpirationHours();
+        Integer maxDownloads = request.getMaxDownloads();
 
         log.info("Creando enlace de compartición: fileId={}, expHoras={}, maxDescargas={}, usuario={}",
                 fileId, expirationHours, maxDownloads, currentUser.getEmail());

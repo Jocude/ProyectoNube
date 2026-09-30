@@ -4,17 +4,22 @@ import com.cloudstorage.api.dto.AuthResponse;
 import com.cloudstorage.api.dto.LoginRequest;
 import com.cloudstorage.api.dto.RegisterRequest;
 import com.cloudstorage.api.entity.User;
+import com.cloudstorage.api.exception.ConflictException;
+import com.cloudstorage.api.exception.RegistrationDisabledException;
 import com.cloudstorage.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
+import java.util.Optional;
 
 /**
  * Servicio de autenticación que gestiona el registro e inicio de sesión de usuarios.
@@ -43,6 +48,11 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
+    private static final String INVALID_CREDENTIALS = "Credenciales inválidas";
+
+    /** Hash BCrypt de relleno para igualar tiempos de login (se calcula una vez, al usarlo). */
+    private volatile String dummyPasswordHash;
+
     /**
      * Si es {@code false}, solo se permite registrar al primer usuario (el propietario del
      * servidor); el resto de registros se rechazan. Configurable con APP_REGISTRATION_ENABLED.
@@ -65,15 +75,17 @@ public class AuthService {
     public AuthResponse register(RegisterRequest request) {
         if (!registrationEnabled && userRepository.count() > 0) {
             log.warn("Registro rechazado (registro deshabilitado): {}", request.getEmail());
-            throw new AccessDeniedException("El registro de nuevos usuarios está deshabilitado");
+            throw new RegistrationDisabledException(
+                    "El registro de nuevos usuarios está deshabilitado");
         }
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("El email ya está registrado");
+        String email = normalizeEmail(request.getEmail());
+        if (userRepository.existsByEmail(email)) {
+            throw new ConflictException("El email ya está registrado");
         }
 
         User user = User.builder()
                 .name(request.getName())
-                .email(request.getEmail())
+                .email(email)
                 .password(passwordEncoder.encode(request.getPassword()))
                 .build();
 
@@ -107,21 +119,28 @@ public class AuthService {
      */
     @Transactional
     public AuthResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("Credenciales inválidas"));
+        Optional<User> found = userRepository.findByEmail(normalizeEmail(request.getEmail()));
+        if (found.isEmpty()) {
+            // Se calcula igualmente un hash BCrypt para que la respuesta tarde lo mismo exista o
+            // no el email; si no, midiendo el tiempo se podría averiguar qué cuentas existen.
+            passwordEncoder.matches(request.getPassword(), dummyPasswordHash());
+            throw new BadCredentialsException(INVALID_CREDENTIALS);
+        }
+        User user = found.get();
 
         // Verificar si la cuenta está bloqueada
         if (!user.isAccountNonLocked()) {
             log.warn("Intento de login en cuenta bloqueada: {}", user.getEmail());
             throw new LockedException(
                     "Cuenta bloqueada temporalmente por múltiples intentos fallidos. " +
-                    "Intente de nuevo después de las " + user.getLockedUntil().toString());
+                    "Intente de nuevo después de las "
+                            + user.getLockedUntil().format(DateTimeFormatter.ofPattern("HH:mm")));
         }
 
         // Verificar contraseña
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             handleFailedLogin(user);
-            throw new RuntimeException("Credenciales inválidas");
+            throw new BadCredentialsException(INVALID_CREDENTIALS);
         }
 
         // Login exitoso: resetear contadores
@@ -171,5 +190,17 @@ public class AuthService {
             user.setLockedUntil(null);
             userRepository.save(user);
         }
+    }
+
+    /** Emails sin espacios y en minúsculas: "Ana@X.com" y "ana@x.com" son la misma cuenta. */
+    private static String normalizeEmail(String email) {
+        return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String dummyPasswordHash() {
+        if (dummyPasswordHash == null) {
+            dummyPasswordHash = passwordEncoder.encode("contraseña-de-relleno");
+        }
+        return dummyPasswordHash;
     }
 }

@@ -1,5 +1,8 @@
 package com.cloudstorage.api.controller;
 
+import com.cloudstorage.api.dto.MoveFileRequest;
+import com.cloudstorage.api.dto.RenameRequest;
+import jakarta.validation.Valid;
 import com.cloudstorage.api.dto.FileMetadataResponse;
 import com.cloudstorage.api.entity.User;
 import com.cloudstorage.api.service.FileStorageService;
@@ -176,14 +179,10 @@ public class FileController {
     @PatchMapping("/{id}/rename")
     public ResponseEntity<FileMetadataResponse> rename(
             @PathVariable UUID id,
-            @RequestBody Map<String, String> body,
+            @Valid @RequestBody RenameRequest body,
             @AuthenticationPrincipal User currentUser) {
 
-        String newName = body.get("name");
-        if (newName == null || newName.isBlank()) {
-            return ResponseEntity.badRequest().build();
-        }
-
+        String newName = body.getName();
         log.info("Solicitud de renombrar archivo: id={}, nuevoNombre='{}', usuario={}", id, newName, currentUser.getId());
 
         FileMetadataResponse response = fileStorageService.renameFile(id, newName, currentUser);
@@ -194,7 +193,7 @@ public class FileController {
      * Mueve un archivo a otra carpeta.
      *
      * @param id          el identificador UUID del archivo
-     * @param body        mapa con el campo "folderId" (UUID de destino, o null para raíz)
+     * @param body        cuerpo con "folderId" (UUID de destino, o null para raíz)
      * @param currentUser el usuario autenticado
      * @return respuesta HTTP 200 (OK) con los metadatos actualizados
      */
@@ -202,13 +201,10 @@ public class FileController {
     @PatchMapping("/{id}/move")
     public ResponseEntity<FileMetadataResponse> move(
             @PathVariable UUID id,
-            @RequestBody Map<String, String> body,
+            @RequestBody MoveFileRequest body,
             @AuthenticationPrincipal User currentUser) {
 
-        String folderIdStr = body.get("folderId");
-        UUID targetFolderId = (folderIdStr != null && !folderIdStr.isBlank())
-                ? UUID.fromString(folderIdStr)
-                : null;
+        UUID targetFolderId = body.getFolderId();
 
         log.info("Solicitud de mover archivo: id={}, destino={}, usuario={}", id, targetFolderId, currentUser.getId());
 

@@ -54,38 +54,26 @@ public class MetricsController {
                     .body(Map.of("error", "Acceso denegado: contraseña B2B incorrecta"));
         }
 
-        try {
-            long totalUsers = userRepository.count();
-            long totalFiles = fileMetadataRepository.count();
+        long totalUsers = userRepository.count();
+        long activeFiles = fileMetadataRepository.countByDeletedAtIsNull();
+        long filesInTrash = fileMetadataRepository.countByDeletedAtIsNotNull();
+        // Incluye la papelera: sigue ocupando disco y cuenta para el límite de la licencia
+        long totalStorageUsed = fileMetadataRepository.sumAllFileSize();
+        long quota = licenseValidatorService.getAllowedQuota();
 
-            // Calcular espacio total usado (suma de todos los usuarios)
-            long totalStorageUsed = fileMetadataRepository.findAll().stream()
-                    .filter(f -> f.getDeletedAt() == null)
-                    .mapToLong(f -> f.getFileSize() != null ? f.getFileSize() : 0L)
-                    .sum();
+        Map<String, Object> metrics = new HashMap<>();
+        metrics.put("totalUsers", totalUsers);
+        metrics.put("totalActiveFiles", activeFiles);
+        metrics.put("totalFilesInTrash", filesInTrash);
+        metrics.put("totalStorageUsedBytes", totalStorageUsed);
+        metrics.put("storageQuotaBytes", quota);
+        metrics.put("licensedTo", licenseValidatorService.getLicensedTo());
+        metrics.put("licenseValid", licenseValidatorService.isLicenseValid());
+        metrics.put(
+                "storageUsedPercent",
+                quota > 0 ? Math.round(totalStorageUsed * 1000.0 / quota) / 10.0 : 0.0);
 
-            long filesInTrash = fileMetadataRepository.findAll().stream()
-                    .filter(f -> f.getDeletedAt() != null)
-                    .count();
-
-            Map<String, Object> metrics = new HashMap<>();
-            metrics.put("totalUsers", totalUsers);
-            metrics.put("totalActiveFiles", totalFiles - filesInTrash);
-            metrics.put("totalFilesInTrash", filesInTrash);
-            metrics.put("totalStorageUsedBytes", totalStorageUsed);
-            metrics.put("storageQuotaBytes", licenseValidatorService.getAllowedQuota());
-            metrics.put("licensedTo", licenseValidatorService.getLicensedTo());
-            metrics.put("licenseValid", licenseValidatorService.isLicenseValid());
-            metrics.put("storageUsedPercent",
-                    Math.round((totalStorageUsed * 100.0) / licenseValidatorService.getAllowedQuota() * 10) / 10.0);
-
-            log.info("Métricas del sistema consultadas por admin B2B");
-            return ResponseEntity.ok(metrics);
-
-        } catch (Exception e) {
-            log.error("Error al calcular métricas: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error al obtener métricas: " + e.getMessage()));
-        }
+        log.info("Métricas del sistema consultadas por admin B2B");
+        return ResponseEntity.ok(metrics);
     }
 }

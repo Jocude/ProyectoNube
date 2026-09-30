@@ -529,7 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let errorMsg = 'Error al subir el archivo';
         try {
           const resp = JSON.parse(xhr.responseText);
-          if (resp.message) errorMsg = resp.message;
+          if (resp.error) errorMsg = resp.error;
         } catch (_) { /* ignorar error de parseo */ }
         showToast(errorMsg, 'error');
       }
@@ -776,8 +776,10 @@ document.addEventListener('DOMContentLoaded', () => {
       headers
     });
 
-    // Manejar 401: sesión expirada o no autorizado
-    if (response.status === 401) {
+    // Manejar 401: sesión expirada. En login/registro un 401 significa credenciales
+    // incorrectas, así que se trata como un error normal más abajo.
+    const isAuthEndpoint = url.includes('/auth/');
+    if (response.status === 401 && !isAuthEndpoint) {
       autoLogout();
       const error = new Error('Sesión expirada. Por favor, inicia sesión de nuevo.');
       error.status = 401;
@@ -794,7 +796,9 @@ document.addEventListener('DOMContentLoaded', () => {
       let errorMessage = 'Ha ocurrido un error inesperado';
       try {
         const errorData = await response.json();
-        if (errorData.message) errorMessage = errorData.message;
+        // El backend envía el mensaje en "error" (ver GlobalExceptionHandler)
+        if (errorData.error) errorMessage = errorData.error;
+        else if (errorData.message) errorMessage = errorData.message;
       } catch (_) { /* la respuesta no era JSON */ }
 
       const error = new Error(errorMessage);
