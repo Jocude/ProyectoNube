@@ -1,22 +1,21 @@
 package com.cloudstorage.api.service;
 
 import com.cloudstorage.api.exception.FileValidationException;
+import java.nio.file.Path;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.nio.file.Path;
-
 /**
  * Servicio de validación y sanitización de archivos.
  *
- * <p>Proporciona funcionalidades para validar archivos subidos por el usuario
- * y sanitizar nombres de archivo para prevenir ataques de inyección de rutas
- * (Path Traversal) y otros vectores de seguridad.</p>
+ * <p>Proporciona funcionalidades para validar archivos subidos por el usuario y sanitizar nombres
+ * de archivo para prevenir ataques de inyección de rutas (Path Traversal) y otros vectores de
+ * seguridad.
  *
- * <p><strong>Nota:</strong> Este servicio no impone límites de tamaño de archivo
- * ni restricciones de extensión, permitiendo la subida de cualquier tipo
- * y tamaño de archivo según los requisitos del sistema.</p>
+ * <p><strong>Nota:</strong> Este servicio no impone límites de tamaño de archivo ni restricciones
+ * de extensión, permitiendo la subida de cualquier tipo y tamaño de archivo según los requisitos
+ * del sistema.
  *
  * @author Cloud Storage API
  * @version 1.0
@@ -29,17 +28,18 @@ public class FileValidationService {
     private static final int MAX_FILENAME_LENGTH = 255;
 
     /**
-     * Sanitiza un nombre de archivo eliminando caracteres peligrosos y
-     * componentes de ruta para prevenir ataques de inyección.
+     * Sanitiza un nombre de archivo eliminando caracteres peligrosos y componentes de ruta para
+     * prevenir ataques de inyección.
      *
-     * <p>El proceso de sanitización incluye:</p>
+     * <p>El proceso de sanitización incluye:
+     *
      * <ul>
-     *   <li>Extracción del nombre base del archivo (sin ruta)</li>
-     *   <li>Eliminación de bytes nulos</li>
-     *   <li>Reemplazo de separadores de ruta y secuencias de traversal</li>
-     *   <li>Eliminación de caracteres no permitidos</li>
-     *   <li>Recorte de puntos y espacios al inicio y final</li>
-     *   <li>Limitación de longitud a 255 caracteres</li>
+     *   <li>Extracción del nombre base del archivo (sin ruta)
+     *   <li>Eliminación de bytes nulos
+     *   <li>Reemplazo de separadores de ruta y secuencias de traversal
+     *   <li>Eliminación de caracteres no permitidos
+     *   <li>Recorte de puntos y espacios al inicio y final
+     *   <li>Limitación de longitud a 255 caracteres
      * </ul>
      *
      * @param fileName el nombre de archivo original a sanitizar
@@ -53,10 +53,7 @@ public class FileValidationService {
         String sanitized = fileName;
 
         // Extraer solo el nombre del archivo (sin ruta)
-        int lastSeparatorIndex = Math.max(
-                sanitized.lastIndexOf('/'),
-                sanitized.lastIndexOf('\\')
-        );
+        int lastSeparatorIndex = Math.max(sanitized.lastIndexOf('/'), sanitized.lastIndexOf('\\'));
         if (lastSeparatorIndex >= 0) {
             sanitized = sanitized.substring(lastSeparatorIndex + 1);
         }
@@ -78,7 +75,8 @@ public class FileValidationService {
 
         // Si el resultado está vacío, usar nombre por defecto
         if (sanitized.isBlank()) {
-            log.warn("El nombre de archivo quedó vacío después de la sanitización. Usando nombre por defecto.");
+            log.warn(
+                    "El nombre de archivo quedó vacío después de la sanitización. Usando nombre por defecto.");
             return "unnamed_file";
         }
 
@@ -95,8 +93,8 @@ public class FileValidationService {
     /**
      * Valida un archivo subido por el usuario.
      *
-     * <p>Verifica que el archivo no sea nulo ni esté vacío. No se aplican
-     * restricciones de tamaño ni de tipo de archivo por diseño del sistema.</p>
+     * <p>Verifica que el archivo no sea nulo ni esté vacío. No se aplican restricciones de tamaño
+     * ni de tipo de archivo por diseño del sistema.
      *
      * @param file el archivo multipart a validar
      * @throws FileValidationException si el archivo es nulo o está vacío
@@ -110,8 +108,11 @@ public class FileValidationService {
         String originalFilename = file.getOriginalFilename();
         String sanitized = sanitizeFileName(originalFilename);
 
-        log.debug("Archivo validado correctamente: nombre='{}', tamaño={} bytes, tipo='{}'",
-                sanitized, file.getSize(), file.getContentType());
+        log.debug(
+                "Archivo validado correctamente: nombre='{}', tamaño={} bytes, tipo='{}'",
+                sanitized,
+                file.getSize(),
+                file.getContentType());
 
         // No se aplica límite de tamaño (sin restricción por diseño)
         // No se aplica restricción de extensión (cualquier tipo de archivo permitido)
@@ -120,11 +121,11 @@ public class FileValidationService {
     /**
      * Valida que una ruta de almacenamiento objetivo no escape del directorio base.
      *
-     * <p>Previene ataques de Path Traversal verificando que la ruta normalizada
-     * del archivo objetivo comience con la ruta normalizada del directorio base.</p>
+     * <p>Previene ataques de Path Traversal verificando que la ruta normalizada del archivo
+     * objetivo comience con la ruta normalizada del directorio base.
      *
      * @param targetPath la ruta objetivo a validar
-     * @param baseDir    el directorio base permitido
+     * @param baseDir el directorio base permitido
      * @throws FileValidationException si se detecta un intento de Path Traversal
      */
     public void validateStoragePath(Path targetPath, Path baseDir) {
@@ -132,8 +133,10 @@ public class FileValidationService {
         Path normalizedBase = baseDir.normalize().toAbsolutePath();
 
         if (!normalizedTarget.startsWith(normalizedBase)) {
-            log.error("Intento de Path Traversal detectado. Ruta objetivo: '{}', Directorio base: '{}'",
-                    normalizedTarget, normalizedBase);
+            log.error(
+                    "Intento de Path Traversal detectado. Ruta objetivo: '{}', Directorio base: '{}'",
+                    normalizedTarget,
+                    normalizedBase);
             throw new FileValidationException("Intento de Path Traversal detectado");
         }
 

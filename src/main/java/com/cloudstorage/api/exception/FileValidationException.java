@@ -1,8 +1,8 @@
 package com.cloudstorage.api.exception;
 
 /**
- * Excepción de tiempo de ejecución lanzada cuando un archivo no cumple
- * con las validaciones requeridas (formato, tamaño, nombre, etc.).
+ * Excepción de tiempo de ejecución lanzada cuando un archivo no cumple con las validaciones
+ * requeridas (formato, tamaño, nombre, etc.).
  *
  * @author CloudStorage Team
  */

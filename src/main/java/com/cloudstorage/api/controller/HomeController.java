@@ -3,20 +3,18 @@ package com.cloudstorage.api.controller;
 import com.cloudstorage.api.service.LicenseValidatorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
  * Controlador REST para la ruta raíz de la API.
- * <p>
- * Proporciona un mensaje de bienvenida, información de la versión,
- * estado del servicio, información de licencia y la URL pública del túnel.
- * </p>
+ *
+ * <p>Proporciona un mensaje de bienvenida, información de la versión, estado del servicio,
+ * información de licencia y la URL pública del túnel.
  *
  * @author Cloud Storage API
  * @version 1.0
@@ -33,12 +31,16 @@ public class HomeController {
      *
      * @return ResponseEntity con información básica de la API y estado 200 (OK)
      */
-    @Operation(summary = "Información de la API", description = "Devuelve el estado, versión, licencia y URL pública del servidor")
+    @Operation(
+            summary = "Información de la API",
+            description = "Devuelve el estado, versión, licencia y URL pública del servidor")
     @GetMapping("/api/info")
     public ResponseEntity<Map<String, Object>> home() {
         Map<String, Object> info = new HashMap<>();
         info.put("app", "Cloud Storage API");
-        info.put("description", "Servicio backend para almacenamiento en la nube seguro (Clon de Google Drive)");
+        info.put(
+                "description",
+                "Servicio backend para almacenamiento en la nube seguro (Clon de Google Drive)");
         info.put("version", "1.0");
         info.put("status", "UP");
 

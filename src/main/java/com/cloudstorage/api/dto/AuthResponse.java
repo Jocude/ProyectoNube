@@ -1,15 +1,14 @@
 package com.cloudstorage.api.dto;
 
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.UUID;
-
 /**
- * DTO de respuesta para operaciones de autenticación (login y registro).
- * Contiene el token JWT generado junto con información básica del usuario.
+ * DTO de respuesta para operaciones de autenticación (login y registro). Contiene el token JWT
+ * generado junto con información básica del usuario.
  *
  * @author CloudStorage Team
  */
@@ -19,28 +18,18 @@ import java.util.UUID;
 @AllArgsConstructor
 public class AuthResponse {
 
-    /**
-     * Token JWT para autenticación en solicitudes posteriores.
-     */
+    /** Token JWT para autenticación en solicitudes posteriores. */
     private String token;
 
-    /**
-     * Identificador único del usuario autenticado.
-     */
+    /** Identificador único del usuario autenticado. */
     private UUID userId;
 
-    /**
-     * Nombre completo del usuario autenticado.
-     */
+    /** Nombre completo del usuario autenticado. */
     private String name;
 
-    /**
-     * Correo electrónico del usuario autenticado.
-     */
+    /** Correo electrónico del usuario autenticado. */
     private String email;
 
-    /**
-     * Rol del usuario en el sistema (ROLE_USER, ROLE_ADMIN).
-     */
+    /** Rol del usuario en el sistema (ROLE_USER, ROLE_ADMIN). */
     private String role;
 }

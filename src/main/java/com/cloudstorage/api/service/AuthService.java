@@ -7,6 +7,10 @@ import com.cloudstorage.api.entity.User;
 import com.cloudstorage.api.exception.ConflictException;
 import com.cloudstorage.api.exception.RegistrationDisabledException;
 import com.cloudstorage.api.repository.UserRepository;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,19 +20,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.Locale;
-import java.util.Optional;
-
 /**
  * Servicio de autenticación que gestiona el registro e inicio de sesión de usuarios.
- * <p>
- * Proporciona la lógica de negocio para registrar nuevos usuarios con
- * contraseñas cifradas y autenticar usuarios existentes, generando
- * tokens JWT en ambos casos. Incluye protección contra fuerza bruta
- * bloqueando la cuenta temporalmente tras múltiples intentos fallidos.
- * </p>
+ *
+ * <p>Proporciona la lógica de negocio para registrar nuevos usuarios con contraseñas cifradas y
+ * autenticar usuarios existentes, generando tokens JWT en ambos casos. Incluye protección contra
+ * fuerza bruta bloqueando la cuenta temporalmente tras múltiples intentos fallidos.
  *
  * @author CloudStorage API
  * @version 1.0
@@ -62,10 +59,9 @@ public class AuthService {
 
     /**
      * Registra un nuevo usuario en el sistema.
-     * <p>
-     * Verifica que el email no esté registrado previamente, cifra la contraseña,
-     * persiste el usuario y genera un token JWT para autenticación inmediata.
-     * </p>
+     *
+     * <p>Verifica que el email no esté registrado previamente, cifra la contraseña, persiste el
+     * usuario y genera un token JWT para autenticación inmediata.
      *
      * @param request los datos de registro del nuevo usuario
      * @return la respuesta de autenticación con el token JWT y datos del usuario
@@ -83,11 +79,12 @@ public class AuthService {
             throw new ConflictException("El email ya está registrado");
         }
 
-        User user = User.builder()
-                .name(request.getName())
-                .email(email)
-                .password(passwordEncoder.encode(request.getPassword()))
-                .build();
+        User user =
+                User.builder()
+                        .name(request.getName())
+                        .email(email)
+                        .password(passwordEncoder.encode(request.getPassword()))
+                        .build();
 
         User savedUser = userRepository.save(user);
         String token = jwtService.generateToken(savedUser);
@@ -105,17 +102,16 @@ public class AuthService {
 
     /**
      * Autentica un usuario existente en el sistema.
-     * <p>
-     * Busca el usuario por email, verifica que la contraseña proporcionada
-     * coincida con la almacenada y genera un token JWT si las credenciales
-     * son válidas. Implementa protección contra fuerza bruta bloqueando
-     * la cuenta temporalmente tras {@value #MAX_FAILED_ATTEMPTS} intentos fallidos.
-     * </p>
+     *
+     * <p>Busca el usuario por email, verifica que la contraseña proporcionada coincida con la
+     * almacenada y genera un token JWT si las credenciales son válidas. Implementa protección
+     * contra fuerza bruta bloqueando la cuenta temporalmente tras {@value #MAX_FAILED_ATTEMPTS}
+     * intentos fallidos.
      *
      * @param request los datos de inicio de sesión (email y contraseña)
      * @return la respuesta de autenticación con el token JWT y datos del usuario
      * @throws RuntimeException si las credenciales son inválidas
-     * @throws LockedException  si la cuenta está bloqueada por intentos fallidos
+     * @throws LockedException si la cuenta está bloqueada por intentos fallidos
      */
     @Transactional
     public AuthResponse login(LoginRequest request) {
@@ -132,8 +128,8 @@ public class AuthService {
         if (!user.isAccountNonLocked()) {
             log.warn("Intento de login en cuenta bloqueada: {}", user.getEmail());
             throw new LockedException(
-                    "Cuenta bloqueada temporalmente por múltiples intentos fallidos. " +
-                    "Intente de nuevo después de las "
+                    "Cuenta bloqueada temporalmente por múltiples intentos fallidos. "
+                            + "Intente de nuevo después de las "
                             + user.getLockedUntil().format(DateTimeFormatter.ofPattern("HH:mm")));
         }
 
@@ -169,11 +165,17 @@ public class AuthService {
 
         if (newAttempts >= MAX_FAILED_ATTEMPTS) {
             user.setLockedUntil(LocalDateTime.now().plusMinutes(LOCK_DURATION_MINUTES));
-            log.warn("Cuenta bloqueada por {} minutos: {} (intentos fallidos: {})",
-                    LOCK_DURATION_MINUTES, user.getEmail(), newAttempts);
+            log.warn(
+                    "Cuenta bloqueada por {} minutos: {} (intentos fallidos: {})",
+                    LOCK_DURATION_MINUTES,
+                    user.getEmail(),
+                    newAttempts);
         } else {
-            log.warn("Intento fallido de login para: {} ({}/{})",
-                    user.getEmail(), newAttempts, MAX_FAILED_ATTEMPTS);
+            log.warn(
+                    "Intento fallido de login para: {} ({}/{})",
+                    user.getEmail(),
+                    newAttempts,
+                    MAX_FAILED_ATTEMPTS);
         }
 
         userRepository.save(user);

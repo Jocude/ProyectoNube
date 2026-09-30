@@ -2,24 +2,23 @@ package com.cloudstorage.api.service;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.CommandLineRunner;
-import org.springframework.stereotype.Service;
-
 import java.security.KeyFactory;
 import java.security.PublicKey;
 import java.security.spec.X509EncodedKeySpec;
 import java.text.SimpleDateFormat;
 import java.util.Base64;
 import java.util.Date;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.stereotype.Service;
 
 /**
- * Servicio encargado de validar la clave de licencia comercial (License Key)
- * al arrancar el servidor. Si no existe o está vencida, detiene el sistema.
+ * Servicio encargado de validar la clave de licencia comercial (License Key) al arrancar el
+ * servidor. Si no existe o está vencida, detiene el sistema.
  *
- * <p>A diferencia de la versión anterior, todos los campos y métodos son de instancia,
- * permitiendo inyección limpia de dependencias y facilitando los tests unitarios.</p>
+ * <p>A diferencia de la versión anterior, todos los campos y métodos son de instancia, permitiendo
+ * inyección limpia de dependencias y facilitando los tests unitarios.
  */
 @Slf4j
 @Service
@@ -108,11 +107,12 @@ public class LicenseValidatorService implements CommandLineRunner {
         PublicKey publicKey = kf.generatePublic(spec);
 
         // 2. Parsear y verificar la firma del JWT usando la clave pública
-        Claims claims = Jwts.parser()
-                .verifyWith(publicKey)
-                .build()
-                .parseSignedClaims(key.trim())
-                .getPayload();
+        Claims claims =
+                Jwts.parser()
+                        .verifyWith(publicKey)
+                        .build()
+                        .parseSignedClaims(key.trim())
+                        .getPayload();
 
         // 3. Extraer metadatos del cliente
         String tempLicensedTo = claims.getSubject();
@@ -123,7 +123,9 @@ public class LicenseValidatorService implements CommandLineRunner {
 
         // 4. Comprobar fecha de expiración
         if (expiration.before(new Date())) {
-            throw new Exception("La licencia expiró el " + new SimpleDateFormat("dd/MM/yyyy").format(expiration));
+            throw new Exception(
+                    "La licencia expiró el "
+                            + new SimpleDateFormat("dd/MM/yyyy").format(expiration));
         }
 
         // Aplicar cambios en memoria

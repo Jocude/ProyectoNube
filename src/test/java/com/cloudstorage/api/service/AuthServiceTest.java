@@ -1,43 +1,37 @@
 package com.cloudstorage.api.service;
 
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
 import com.cloudstorage.api.dto.AuthResponse;
 import com.cloudstorage.api.dto.LoginRequest;
 import com.cloudstorage.api.dto.RegisterRequest;
 import com.cloudstorage.api.entity.User;
+import com.cloudstorage.api.exception.ConflictException;
 import com.cloudstorage.api.repository.UserRepository;
+import java.time.LocalDateTime;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import com.cloudstorage.api.exception.ConflictException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import java.time.LocalDateTime;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
-
-/**
- * Tests unitarios para {@link AuthService}.
- */
+/** Tests unitarios para {@link AuthService}. */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AuthService Tests")
 class AuthServiceTest {
 
-    @Mock
-    private UserRepository userRepository;
+    @Mock private UserRepository userRepository;
 
-    @Mock
-    private JwtService jwtService;
+    @Mock private JwtService jwtService;
 
     private PasswordEncoder passwordEncoder;
 
@@ -58,15 +52,17 @@ class AuthServiceTest {
     void registerSuccess() {
         when(userRepository.existsByEmail(EMAIL)).thenReturn(false);
         when(jwtService.generateToken(any())).thenReturn("test-jwt-token");
-        when(userRepository.save(any())).thenAnswer(inv -> {
-            User u = inv.getArgument(0);
-            return User.builder()
-                    .id(UUID.randomUUID())
-                    .name(u.getName())
-                    .email(u.getEmail())
-                    .password(u.getPassword())
-                    .build();
-        });
+        when(userRepository.save(any()))
+                .thenAnswer(
+                        inv -> {
+                            User u = inv.getArgument(0);
+                            return User.builder()
+                                    .id(UUID.randomUUID())
+                                    .name(u.getName())
+                                    .email(u.getEmail())
+                                    .password(u.getPassword())
+                                    .build();
+                        });
 
         RegisterRequest req = new RegisterRequest();
         req.setName("Test User");
@@ -97,13 +93,14 @@ class AuthServiceTest {
     @Test
     @DisplayName("Login exitoso con credenciales válidas")
     void loginSuccess() {
-        User user = User.builder()
-                .id(UUID.randomUUID())
-                .name("Test User")
-                .email(EMAIL)
-                .password(ENCODED_PASSWORD)
-                .failedLoginAttempts(0)
-                .build();
+        User user =
+                User.builder()
+                        .id(UUID.randomUUID())
+                        .name("Test User")
+                        .email(EMAIL)
+                        .password(ENCODED_PASSWORD)
+                        .failedLoginAttempts(0)
+                        .build();
 
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
         when(jwtService.generateToken(user)).thenReturn("valid-token");
@@ -121,12 +118,13 @@ class AuthServiceTest {
     @Test
     @DisplayName("Login con contraseña incorrecta lanza BadCredentialsException (401)")
     void loginInvalidPassword() {
-        User user = User.builder()
-                .id(UUID.randomUUID())
-                .email(EMAIL)
-                .password(ENCODED_PASSWORD)
-                .failedLoginAttempts(0)
-                .build();
+        User user =
+                User.builder()
+                        .id(UUID.randomUUID())
+                        .email(EMAIL)
+                        .password(ENCODED_PASSWORD)
+                        .failedLoginAttempts(0)
+                        .build();
 
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
         when(userRepository.save(any())).thenReturn(user);
@@ -143,13 +141,14 @@ class AuthServiceTest {
     @Test
     @DisplayName("Login en cuenta bloqueada lanza LockedException")
     void loginLockedAccount() {
-        User user = User.builder()
-                .id(UUID.randomUUID())
-                .email(EMAIL)
-                .password(ENCODED_PASSWORD)
-                .failedLoginAttempts(5)
-                .lockedUntil(LocalDateTime.now().plusMinutes(10))
-                .build();
+        User user =
+                User.builder()
+                        .id(UUID.randomUUID())
+                        .email(EMAIL)
+                        .password(ENCODED_PASSWORD)
+                        .failedLoginAttempts(5)
+                        .lockedUntil(LocalDateTime.now().plusMinutes(10))
+                        .build();
 
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
 
@@ -157,19 +156,19 @@ class AuthServiceTest {
         req.setEmail(EMAIL);
         req.setPassword(PASSWORD);
 
-        assertThatThrownBy(() -> authService.login(req))
-                .isInstanceOf(LockedException.class);
+        assertThatThrownBy(() -> authService.login(req)).isInstanceOf(LockedException.class);
     }
 
     @Test
     @DisplayName("Cinco intentos fallidos bloquean la cuenta")
     void fiveFailedAttemptsLockAccount() {
-        User user = User.builder()
-                .id(UUID.randomUUID())
-                .email(EMAIL)
-                .password(ENCODED_PASSWORD)
-                .failedLoginAttempts(4)
-                .build();
+        User user =
+                User.builder()
+                        .id(UUID.randomUUID())
+                        .email(EMAIL)
+                        .password(ENCODED_PASSWORD)
+                        .failedLoginAttempts(4)
+                        .build();
 
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
         when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -178,8 +177,7 @@ class AuthServiceTest {
         req.setEmail(EMAIL);
         req.setPassword("wrong");
 
-        assertThatThrownBy(() -> authService.login(req))
-                .isInstanceOf(RuntimeException.class);
+        assertThatThrownBy(() -> authService.login(req)).isInstanceOf(RuntimeException.class);
 
         verify(userRepository).save(argThat(u -> u.getLockedUntil() != null));
     }
@@ -199,15 +197,17 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("El email se normaliza (minúsculas y sin espacios) al registrar y al iniciar sesión")
+    @DisplayName(
+            "El email se normaliza (minúsculas y sin espacios) al registrar y al iniciar sesión")
     void emailIsNormalized() {
-        User user = User.builder()
-                .id(UUID.randomUUID())
-                .name("Test User")
-                .email(EMAIL)
-                .password(ENCODED_PASSWORD)
-                .failedLoginAttempts(0)
-                .build();
+        User user =
+                User.builder()
+                        .id(UUID.randomUUID())
+                        .name("Test User")
+                        .email(EMAIL)
+                        .password(ENCODED_PASSWORD)
+                        .failedLoginAttempts(0)
+                        .build();
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
         when(jwtService.generateToken(user)).thenReturn("valid-token");
 

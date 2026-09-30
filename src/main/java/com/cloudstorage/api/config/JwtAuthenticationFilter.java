@@ -7,6 +7,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
@@ -16,16 +18,11 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import java.io.IOException;
-import java.util.Optional;
-
 /**
  * Filtro de autenticación JWT que se ejecuta una vez por cada solicitud HTTP.
- * <p>
- * Intercepta las solicitudes entrantes, extrae el token JWT del encabezado
- * Authorization, lo valida y establece el contexto de seguridad de Spring
- * si el token es válido.
- * </p>
+ *
+ * <p>Intercepta las solicitudes entrantes, extrae el token JWT del encabezado Authorization, lo
+ * valida y establece el contexto de seguridad de Spring si el token es válido.
  *
  * @author CloudStorage API
  * @version 1.0
@@ -40,25 +37,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     /**
      * Procesa la solicitud HTTP para autenticación basada en JWT.
-     * <p>
-     * Extrae el token del encabezado Authorization, valida el token
-     * y configura el contexto de seguridad de Spring si es válido.
-     * Si el token es inválido o está ausente, la solicitud continúa
-     * sin autenticación, delegando el control a Spring Security.
-     * </p>
      *
-     * @param request     la solicitud HTTP entrante
-     * @param response    la respuesta HTTP
+     * <p>Extrae el token del encabezado Authorization, valida el token y configura el contexto de
+     * seguridad de Spring si es válido. Si el token es inválido o está ausente, la solicitud
+     * continúa sin autenticación, delegando el control a Spring Security.
+     *
+     * @param request la solicitud HTTP entrante
+     * @param response la respuesta HTTP
      * @param filterChain la cadena de filtros para continuar el procesamiento
      * @throws ServletException si ocurre un error en el servlet
-     * @throws IOException      si ocurre un error de entrada/salida
+     * @throws IOException si ocurre un error de entrada/salida
      */
     @Override
     protected void doFilterInternal(
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
-            @NonNull FilterChain filterChain
-    ) throws ServletException, IOException {
+            @NonNull FilterChain filterChain)
+            throws ServletException, IOException {
         try {
             final String authHeader = request.getHeader("Authorization");
 
@@ -70,7 +65,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             final String jwt = authHeader.substring(7);
             final String username = jwtService.extractUsername(jwt);
 
-            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            if (username != null
+                    && SecurityContextHolder.getContext().getAuthentication() == null) {
                 Optional<User> userOptional = userRepository.findByEmail(username);
 
                 if (userOptional.isPresent()) {
@@ -79,13 +75,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     if (jwtService.isTokenValid(jwt, user)) {
                         UsernamePasswordAuthenticationToken authToken =
                                 new UsernamePasswordAuthenticationToken(
-                                        user,
-                                        null,
-                                        user.getAuthorities()
-                                );
+                                        user, null, user.getAuthorities());
                         authToken.setDetails(
-                                new WebAuthenticationDetailsSource().buildDetails(request)
-                        );
+                                new WebAuthenticationDetailsSource().buildDetails(request));
                         SecurityContextHolder.getContext().setAuthentication(authToken);
                         log.debug("Usuario autenticado exitosamente: {}", username);
                     }

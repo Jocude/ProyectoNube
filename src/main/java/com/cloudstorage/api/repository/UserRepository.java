@@ -1,16 +1,14 @@
 package com.cloudstorage.api.repository;
 
 import com.cloudstorage.api.entity.User;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.Optional;
-import java.util.UUID;
-
 /**
- * Repositorio JPA para la entidad {@link User}.
- * Proporciona operaciones CRUD estándar y consultas personalizadas
- * para la gestión de usuarios en el sistema.
+ * Repositorio JPA para la entidad {@link User}. Proporciona operaciones CRUD estándar y consultas
+ * personalizadas para la gestión de usuarios en el sistema.
  *
  * @author CloudStorage Team
  */

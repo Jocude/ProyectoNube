@@ -1,13 +1,12 @@
 package com.cloudstorage.api.dto;
 
 import com.cloudstorage.api.entity.ShareToken;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * DTO de respuesta para un token de compartición de archivo.

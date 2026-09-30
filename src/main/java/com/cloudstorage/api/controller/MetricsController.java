@@ -6,6 +6,8 @@ import com.cloudstorage.api.service.B2bAdminService;
 import com.cloudstorage.api.service.LicenseValidatorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -15,14 +17,11 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
  * Controlador de métricas del sistema para el panel de administración B2B.
  *
- * <p>Todos los endpoints requieren la contraseña de administrador B2B en el header
- * {@code X-B2B-Admin-Password}.</p>
+ * <p>Todos los endpoints requieren la contraseña de administrador B2B en el header {@code
+ * X-B2B-Admin-Password}.
  *
  * @author CloudStorage Team
  */
@@ -44,10 +43,13 @@ public class MetricsController {
      * @param adminPassword contraseña de administrador B2B
      * @return mapa con estadísticas del sistema
      */
-    @Operation(summary = "Métricas del sistema", description = "Requiere contraseña B2B en header X-B2B-Admin-Password")
+    @Operation(
+            summary = "Métricas del sistema",
+            description = "Requiere contraseña B2B en header X-B2B-Admin-Password")
     @GetMapping
     public ResponseEntity<?> getMetrics(
-            @RequestHeader(value = "X-B2B-Admin-Password", defaultValue = "") String adminPassword) {
+            @RequestHeader(value = "X-B2B-Admin-Password", defaultValue = "")
+                    String adminPassword) {
 
         if (!b2bAdminService.authenticate(adminPassword)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)

@@ -1,15 +1,14 @@
 package com.cloudstorage.api.dto;
 
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
 /**
- * DTO que encapsula el contenido de un directorio actual (subcarpetas y archivos),
- * los breadcrumbs para navegación y los detalles de cuota de espacio.
+ * DTO que encapsula el contenido de un directorio actual (subcarpetas y archivos), los breadcrumbs
+ * para navegación y los detalles de cuota de espacio.
  */
 @Data
 @Builder

@@ -2,6 +2,11 @@ package com.cloudstorage.api.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,15 +15,9 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.UUID;
-
 /**
- * Entidad que representa un usuario del sistema de almacenamiento en la nube.
- * Implementa {@link UserDetails} para integrarse con Spring Security.
+ * Entidad que representa un usuario del sistema de almacenamiento en la nube. Implementa {@link
+ * UserDetails} para integrarse con Spring Security.
  *
  * @author CloudStorage Team
  */
@@ -30,80 +29,65 @@ import java.util.UUID;
 @AllArgsConstructor
 public class User implements UserDetails {
 
-    /**
-     * Identificador único del usuario generado automáticamente como UUID.
-     */
+    /** Identificador único del usuario generado automáticamente como UUID. */
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    /**
-     * Nombre completo del usuario.
-     */
+    /** Nombre completo del usuario. */
     @Column(nullable = false)
     private String name;
 
-    /**
-     * Correo electrónico del usuario. Debe ser único en el sistema.
-     */
+    /** Correo electrónico del usuario. Debe ser único en el sistema. */
     @Column(nullable = false, unique = true)
     private String email;
 
-    /**
-     * Contraseña del usuario almacenada como hash BCrypt.
-     */
+    /** Contraseña del usuario almacenada como hash BCrypt. */
     @Column(nullable = false)
     private String password;
 
-    /**
-     * Rol del usuario en el sistema (USER o ADMIN).
-     */
+    /** Rol del usuario en el sistema (USER o ADMIN). */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
     private UserRole role = UserRole.ROLE_USER;
 
     /**
-     * Número de intentos de login fallidos consecutivos.
-     * Se resetea a 0 cuando el login es exitoso.
+     * Número de intentos de login fallidos consecutivos. Se resetea a 0 cuando el login es exitoso.
      */
     @Column(name = "failed_login_attempts", nullable = false)
     @Builder.Default
     private int failedLoginAttempts = 0;
 
     /**
-     * Fecha y hora hasta la que la cuenta está bloqueada.
-     * Si es null o en el pasado, la cuenta no está bloqueada.
+     * Fecha y hora hasta la que la cuenta está bloqueada. Si es null o en el pasado, la cuenta no
+     * está bloqueada.
      */
     @Column(name = "locked_until")
     private LocalDateTime lockedUntil;
 
-    /**
-     * Indica si la cuenta del usuario está habilitada.
-     */
+    /** Indica si la cuenta del usuario está habilitada. */
     @Column(nullable = false)
     @Builder.Default
     private boolean enabled = true;
 
     /**
-     * Fecha y hora de creación del registro. Se establece automáticamente
-     * al persistir la entidad y no puede ser actualizada.
+     * Fecha y hora de creación del registro. Se establece automáticamente al persistir la entidad y
+     * no puede ser actualizada.
      */
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     /**
-     * Lista de archivos que pertenecen al usuario.
-     * La relación es bidireccional con eliminación en cascada.
+     * Lista de archivos que pertenecen al usuario. La relación es bidireccional con eliminación en
+     * cascada.
      */
     @OneToMany(mappedBy = "owner", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     @Builder.Default
     private List<FileMetadata> files = new ArrayList<>();
 
-    /**
-     * Callback de JPA que establece la fecha de creación antes de persistir la entidad.
-     */
+    /** Callback de JPA que establece la fecha de creación antes de persistir la entidad. */
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
@@ -120,8 +104,8 @@ public class User implements UserDetails {
     }
 
     /**
-     * Retorna el nombre de usuario utilizado para la autenticación.
-     * En este sistema se utiliza el correo electrónico como identificador de acceso.
+     * Retorna el nombre de usuario utilizado para la autenticación. En este sistema se utiliza el
+     * correo electrónico como identificador de acceso.
      *
      * @return el correo electrónico del usuario
      */
@@ -141,8 +125,8 @@ public class User implements UserDetails {
     }
 
     /**
-     * Indica si la cuenta del usuario está bloqueada.
-     * La cuenta se bloquea temporalmente tras múltiples intentos fallidos de login.
+     * Indica si la cuenta del usuario está bloqueada. La cuenta se bloquea temporalmente tras
+     * múltiples intentos fallidos de login.
      *
      * @return {@code true} si la cuenta NO está bloqueada (lockedUntil es null o pasado)
      */

@@ -1,14 +1,13 @@
 package com.cloudstorage.api.repository;
 
 import com.cloudstorage.api.entity.ShareToken;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Repositorio JPA para la entidad {@link ShareToken}.
@@ -37,7 +36,7 @@ public interface ShareTokenRepository extends JpaRepository<ShareToken, UUID> {
     /**
      * Lista los tokens de compartición asociados a un archivo específico.
      *
-     * @param fileId  el UUID del archivo
+     * @param fileId el UUID del archivo
      * @param ownerId el UUID del propietario (para verificar autorización)
      * @return lista de tokens del archivo
      */

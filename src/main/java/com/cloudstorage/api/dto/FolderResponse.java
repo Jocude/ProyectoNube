@@ -1,16 +1,13 @@
 package com.cloudstorage.api.dto;
 
 import com.cloudstorage.api.entity.Folder;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.UUID;
-
-/**
- * DTO de respuesta para representar los datos públicos de una carpeta.
- */
+/** DTO de respuesta para representar los datos públicos de una carpeta. */
 @Data
 @Builder
 @NoArgsConstructor

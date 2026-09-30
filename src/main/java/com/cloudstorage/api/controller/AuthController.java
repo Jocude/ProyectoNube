@@ -16,11 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Controlador REST para las operaciones de autenticación.
- * <p>
- * Expone los endpoints para el registro de nuevos usuarios y el
- * inicio de sesión de usuarios existentes. Todos los endpoints
- * son públicos (no requieren autenticación previa).
- * </p>
+ *
+ * <p>Expone los endpoints para el registro de nuevos usuarios y el inicio de sesión de usuarios
+ * existentes. Todos los endpoints son públicos (no requieren autenticación previa).
  *
  * @author CloudStorage API
  * @version 1.0
@@ -35,10 +33,9 @@ public class AuthController {
 
     /**
      * Registra un nuevo usuario en el sistema.
-     * <p>
-     * Recibe los datos de registro, crea el usuario y devuelve
-     * un token JWT junto con los datos del usuario creado.
-     * </p>
+     *
+     * <p>Recibe los datos de registro, crea el usuario y devuelve un token JWT junto con los datos
+     * del usuario creado.
      *
      * @param request los datos de registro del nuevo usuario (nombre, email, contraseña)
      * @return ResponseEntity con la respuesta de autenticación y estado HTTP 201 (CREATED)
@@ -52,10 +49,9 @@ public class AuthController {
 
     /**
      * Autentica un usuario existente en el sistema.
-     * <p>
-     * Recibe las credenciales del usuario, las valida y devuelve
-     * un token JWT junto con los datos del usuario autenticado.
-     * </p>
+     *
+     * <p>Recibe las credenciales del usuario, las valida y devuelve un token JWT junto con los
+     * datos del usuario autenticado.
      *
      * @param request los datos de inicio de sesión (email y contraseña)
      * @return ResponseEntity con la respuesta de autenticación y estado HTTP 200 (OK)
