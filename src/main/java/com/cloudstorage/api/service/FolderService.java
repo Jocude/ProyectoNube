@@ -95,6 +95,20 @@ public class FolderService {
      * Obtiene todos los contenidos (carpetas, archivos, breadcrumbs y almacenamiento) de un
      * directorio determinado.
      */
+    /**
+     * Lista todas las carpetas del usuario (sin jerarquía; cada una indica su {@code parentId}). La
+     * interfaz la usa para elegir el destino al mover un archivo.
+     *
+     * @param owner el propietario
+     * @return carpetas ordenadas por nombre
+     */
+    @Transactional(readOnly = true)
+    public List<FolderResponse> listAllFolders(User owner) {
+        return folderRepository.findByOwnerIdOrderByNameAsc(owner.getId()).stream()
+                .map(FolderResponse::fromEntity)
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public FolderContentsResponse getFolderContents(UUID folderId, User owner) {
         FolderResponse currentFolderDto = null;

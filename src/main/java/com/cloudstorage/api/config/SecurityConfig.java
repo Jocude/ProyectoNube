@@ -17,6 +17,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 
 /**
  * Configuración de seguridad de Spring Security para la API.
@@ -32,6 +33,27 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
+
+    /**
+     * Content-Security-Policy: el navegador solo ejecuta scripts servidos por la propia app (nada
+     * en línea ni de terceros), lo que neutraliza la mayoría de ataques XSS. Los estilos en línea
+     * del HTML y las fuentes de Google se permiten; blob: es necesario para las vistas previas.
+     */
+    private static final String CSP =
+            String.join(
+                    "; ",
+                    "default-src 'self'",
+                    "script-src 'self'",
+                    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+                    "font-src 'self' https://fonts.gstatic.com",
+                    "img-src 'self' data: blob:",
+                    "media-src 'self' blob:",
+                    "frame-src 'self' blob:",
+                    "connect-src 'self'",
+                    "object-src 'none'",
+                    "base-uri 'self'",
+                    "form-action 'self'",
+                    "frame-ancestors 'none'");
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RateLimitFilter rateLimitFilter;
@@ -66,6 +88,9 @@ public class SecurityConfig {
                                                 "/js/**",
                                                 "/favicon.ico")
                                         .permitAll()
+                                        // /me necesita sesión; el resto de /api/auth es público
+                                        .requestMatchers("/api/auth/me")
+                                        .authenticated()
                                         .requestMatchers("/api/auth/**")
                                         .permitAll()
                                         .requestMatchers("/api/info")
@@ -83,8 +108,21 @@ public class SecurityConfig {
                                                 "/swagger-ui/**",
                                                 "/swagger-ui.html")
                                         .permitAll()
+                                        // Panel B2B y métricas: solo el administrador (además
+                                        // de la contraseña B2B que exige cada endpoint)
+                                        .requestMatchers("/api/admin/**")
+                                        .hasRole("ADMIN")
                                         .anyRequest()
                                         .authenticated())
+                .headers(
+                        headers ->
+                                headers.contentSecurityPolicy(csp -> csp.policyDirectives(CSP))
+                                        .referrerPolicy(
+                                                referrer ->
+                                                        referrer.policy(
+                                                                ReferrerPolicyHeaderWriter
+                                                                        .ReferrerPolicy
+                                                                        .SAME_ORIGIN)))
                 // Sin token válido: 401 (por defecto Spring respondería 403, que el frontend
                 // no interpreta como "sesión caducada")
                 .exceptionHandling(

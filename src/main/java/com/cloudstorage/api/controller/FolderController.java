@@ -9,6 +9,7 @@ import com.cloudstorage.api.service.FolderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -65,6 +66,15 @@ public class FolderController {
     }
 
     /** Obtiene el listado de archivos, carpetas y breadcrumbs del directorio actual. */
+    @Operation(
+            summary = "Listar todas las carpetas",
+            description = "Lista plana de las carpetas del usuario, cada una con su parentId")
+    @GetMapping
+    public ResponseEntity<List<FolderResponse>> listAllFolders(
+            @AuthenticationPrincipal User currentUser) {
+        return ResponseEntity.ok(folderService.listAllFolders(currentUser));
+    }
+
     @Operation(summary = "Listar contenidos de carpeta")
     @GetMapping("/contents")
     public ResponseEntity<FolderContentsResponse> getContents(

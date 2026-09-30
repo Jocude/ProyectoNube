@@ -27,4 +27,7 @@ public interface FolderRepository extends JpaRepository<Folder, UUID> {
      * Comprueba si ya existe una carpeta con el mismo nombre dentro de un directorio específico.
      */
     boolean existsByNameAndOwnerIdAndParentId(String name, UUID ownerId, UUID parentId);
+
+    /** Todas las carpetas de un usuario, ordenadas por nombre. */
+    List<Folder> findByOwnerIdOrderByNameAsc(UUID ownerId);
 }

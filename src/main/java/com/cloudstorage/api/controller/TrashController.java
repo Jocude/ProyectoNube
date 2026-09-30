@@ -6,6 +6,7 @@ import com.cloudstorage.api.service.FileStorageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -84,5 +85,22 @@ public class TrashController {
         log.info("Eliminación permanente de archivo: id={}, usuario={}", id, currentUser.getId());
         fileStorageService.hardDelete(id, currentUser);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Vacía la papelera: elimina definitivamente todos los archivos del usuario que están en ella.
+     *
+     * @param currentUser el usuario autenticado
+     * @return 200 con el número de archivos eliminados
+     */
+    @Operation(
+            summary = "Vaciar papelera",
+            description = "Elimina definitivamente todos los archivos de la papelera")
+    @DeleteMapping
+    public ResponseEntity<Map<String, Integer>> emptyTrash(
+            @AuthenticationPrincipal User currentUser) {
+        int deleted = fileStorageService.emptyTrash(currentUser);
+        log.info("Papelera vaciada: {} archivos, usuario={}", deleted, currentUser.getId());
+        return ResponseEntity.ok(Map.of("deleted", deleted));
     }
 }

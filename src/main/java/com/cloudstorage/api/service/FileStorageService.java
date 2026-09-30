@@ -405,6 +405,23 @@ public class FileStorageService {
      * @param pageable parámetros de paginación
      * @return página de metadatos de archivos como respuestas DTO
      */
+    /**
+     * Elimina definitivamente todos los archivos de la papelera del usuario.
+     *
+     * @param owner el propietario
+     * @return número de archivos eliminados
+     */
+    @Transactional
+    public int emptyTrash(User owner) {
+        List<FileMetadata> trashed =
+                fileMetadataRepository.findByOwnerIdAndDeletedAtIsNotNullOrderByDeletedAtDesc(
+                        owner.getId());
+        for (FileMetadata file : trashed) {
+            hardDelete(file.getId(), owner);
+        }
+        return trashed.size();
+    }
+
     @Transactional(readOnly = true)
     public Page<FileMetadataResponse> listFiles(User owner, String search, Pageable pageable) {
         Page<FileMetadata> files =

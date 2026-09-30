@@ -9,9 +9,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.cloudstorage.api.config.AuthCookies;
+import com.cloudstorage.api.entity.User;
+import com.cloudstorage.api.entity.UserRole;
+import com.cloudstorage.api.repository.UserRepository;
 import com.cloudstorage.api.service.LicenseValidatorService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.Cookie;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -31,10 +36,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
@@ -62,6 +69,8 @@ class ApiIntegrationTest {
 
     @Autowired private MockMvc mvc;
     @Autowired private ObjectMapper json;
+    @Autowired private UserRepository userRepository;
+    @Autowired private PasswordEncoder passwordEncoder;
 
     @MockBean private LicenseValidatorService licenseValidatorService;
 
@@ -120,6 +129,32 @@ class ApiIntegrationTest {
                                         """
                                                 .formatted(email)))
                         .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        return json.readTree(body).get("token").asText();
+    }
+
+    /**
+     * Crea un administrador directamente en la BD (el orden de los tests no es fijo, así que no se
+     * puede contar con ser "el primer usuario") e inicia sesión con él.
+     */
+    private String adminToken() throws Exception {
+        String email = uniqueEmail();
+        userRepository.save(
+                User.builder()
+                        .name("Admin")
+                        .email(email)
+                        .password(passwordEncoder.encode("ClaveSegura123"))
+                        .role(UserRole.ROLE_ADMIN)
+                        .build());
+        String body =
+                mvc.perform(
+                                withJson(
+                                        post("/api/auth/login"),
+                                        "{\"email\":\"%s\",\"password\":\"ClaveSegura123\"}"
+                                                .formatted(email)))
+                        .andExpect(status().isOk())
                         .andReturn()
                         .getResponse()
                         .getContentAsString();
@@ -519,6 +554,143 @@ class ApiIntegrationTest {
         }
     }
 
+    // ------------------------------------------------------------------ sesión web (cookie)
+
+    @Nested
+    @DisplayName("Sesión web con cookie")
+    class SesionCookie {
+
+        private Cookie loginCookie(String email) throws Exception {
+            MvcResult result =
+                    mvc.perform(
+                                    withJson(
+                                            post("/api/auth/login"),
+                                            "{\"email\":\"%s\",\"password\":\"ClaveSegura123\"}"
+                                                    .formatted(email)))
+                            .andExpect(status().isOk())
+                            .andReturn();
+            return result.getResponse().getCookie(AuthCookies.NAME);
+        }
+
+        @Test
+        @DisplayName("El login deja una cookie HttpOnly y SameSite=Strict")
+        void loginSetsSecureCookie() throws Exception {
+            String email = uniqueEmail();
+            register(email);
+            MvcResult result =
+                    mvc.perform(
+                                    withJson(
+                                            post("/api/auth/login"),
+                                            "{\"email\":\"%s\",\"password\":\"ClaveSegura123\"}"
+                                                    .formatted(email)))
+                            .andReturn();
+            String setCookie = result.getResponse().getHeader("Set-Cookie");
+            assertThat(setCookie)
+                    .startsWith(AuthCookies.NAME + "=")
+                    .contains("HttpOnly")
+                    .contains("SameSite=Strict")
+                    .contains("Path=/");
+        }
+
+        @Test
+        @DisplayName("Con la cookie se puede consultar /api/auth/me y leer datos")
+        void cookieAuthenticatesReads() throws Exception {
+            String email = uniqueEmail();
+            register(email);
+            Cookie cookie = loginCookie(email);
+
+            mvc.perform(get("/api/auth/me").cookie(cookie).with(fromClientIp()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.email").value(email))
+                    .andExpect(jsonPath("$.token").doesNotExist());
+            mvc.perform(get("/api/folders/contents").cookie(cookie).with(fromClientIp()))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("Con cookie, modificar datos sin la cabecera anti-CSRF responde 401")
+        void cookieWithoutCsrfHeaderCannotModify() throws Exception {
+            String email = uniqueEmail();
+            register(email);
+            Cookie cookie = loginCookie(email);
+
+            mvc.perform(withJson(post("/api/folders"), "{\"name\":\"X\"}").cookie(cookie))
+                    .andExpect(status().isUnauthorized());
+            mvc.perform(
+                            withJson(post("/api/folders"), "{\"name\":\"X\"}")
+                                    .cookie(cookie)
+                                    .header(AuthCookies.CSRF_HEADER, "XMLHttpRequest"))
+                    .andExpect(status().isCreated());
+        }
+
+        @Test
+        @DisplayName("El logout borra la cookie")
+        void logoutClearsCookie() throws Exception {
+            MvcResult result =
+                    mvc.perform(post("/api/auth/logout").with(fromClientIp()))
+                            .andExpect(status().isNoContent())
+                            .andReturn();
+            assertThat(result.getResponse().getHeader("Set-Cookie"))
+                    .startsWith(AuthCookies.NAME + "=;")
+                    .contains("Max-Age=0");
+        }
+
+        @Test
+        @DisplayName("Las respuestas llevan Content-Security-Policy")
+        void responsesIncludeCsp() throws Exception {
+            MvcResult result = mvc.perform(get("/api/info").with(fromClientIp())).andReturn();
+            assertThat(result.getResponse().getHeader("Content-Security-Policy"))
+                    .contains("script-src 'self'")
+                    .contains("frame-ancestors 'none'");
+        }
+    }
+
+    // ------------------------------------------------------------------ papelera y carpetas
+
+    @Nested
+    @DisplayName("Papelera y listado de carpetas")
+    class PapeleraYCarpetas {
+
+        @Test
+        @DisplayName("Vaciar la papelera elimina todos sus archivos y libera la cuota")
+        void emptyTrash() throws Exception {
+            String token = register(uniqueEmail());
+            String a = upload(token, "a.txt", "aaaa".getBytes()).get("id").asText();
+            String b = upload(token, "b.txt", "bbbb".getBytes()).get("id").asText();
+            upload(token, "c.txt", "cccc".getBytes());
+            mvc.perform(auth(delete("/api/files/" + a), token)).andExpect(status().isNoContent());
+            mvc.perform(auth(delete("/api/files/" + b), token)).andExpect(status().isNoContent());
+
+            mvc.perform(auth(delete("/api/trash"), token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.deleted").value(2));
+            mvc.perform(auth(get("/api/trash"), token)).andExpect(jsonPath("$.length()").value(0));
+            mvc.perform(auth(get("/api/folders/contents"), token))
+                    .andExpect(jsonPath("$.storageUsed").value(4));
+        }
+
+        @Test
+        @DisplayName("GET /api/folders lista todas las carpetas con su carpeta padre")
+        void listAllFolders() throws Exception {
+            String token = register(uniqueEmail());
+            String parent = createFolder(token, "Padre");
+            mvc.perform(
+                            auth(
+                                    withJson(
+                                            post("/api/folders"),
+                                            "{\"name\":\"Hija\",\"parentId\":\"" + parent + "\"}"),
+                                    token))
+                    .andExpect(status().isCreated());
+
+            mvc.perform(auth(get("/api/folders"), token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(2))
+                    .andExpect(jsonPath("$[0].name").value("Hija"))
+                    .andExpect(jsonPath("$[0].parentId").value(parent))
+                    .andExpect(jsonPath("$[1].name").value("Padre"));
+        }
+    }
+
     // ------------------------------------------------------------------ panel B2B
 
     @Nested
@@ -526,9 +698,19 @@ class ApiIntegrationTest {
     class PanelB2b {
 
         @Test
+        @DisplayName("Un usuario que no es administrador recibe 403 aunque sepa la contraseña")
+        void nonAdminCannotUseAdminPanel() throws Exception {
+            String token = register(uniqueEmail());
+            mvc.perform(
+                            auth(get("/api/admin/config"), token)
+                                    .header("X-B2B-Admin-Password", ADMIN_PASSWORD))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
         @DisplayName("Con contraseña incorrecta responde 403")
         void wrongAdminPasswordReturns403() throws Exception {
-            String token = register(uniqueEmail());
+            String token = adminToken();
             mvc.perform(
                             auth(get("/api/admin/config"), token)
                                     .header("X-B2B-Admin-Password", "incorrecta"))
@@ -538,7 +720,7 @@ class ApiIntegrationTest {
         @Test
         @DisplayName("La configuración visible nunca incluye secretos")
         void configNeverExposesSecrets() throws Exception {
-            String token = register(uniqueEmail());
+            String token = adminToken();
             String body =
                     mvc.perform(
                                     auth(get("/api/admin/config"), token)
@@ -557,7 +739,7 @@ class ApiIntegrationTest {
         @Test
         @DisplayName("Una licencia con salto de línea (inyección en el .env) se rechaza con 400")
         void licenseInjectionIsRejected() throws Exception {
-            String token = register(uniqueEmail());
+            String token = adminToken();
             mvc.perform(
                             auth(
                                             withJson(

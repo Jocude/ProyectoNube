@@ -217,4 +217,23 @@ class AuthServiceTest {
 
         assertThat(authService.login(req).getToken()).isEqualTo("valid-token");
     }
+
+    @Test
+    @DisplayName("El primer usuario registrado es administrador; los siguientes, usuarios normales")
+    void firstUserIsAdmin() {
+        when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(jwtService.generateToken(any())).thenReturn("t");
+
+        RegisterRequest req = new RegisterRequest();
+        req.setName("Owner");
+        req.setEmail("owner@example.com");
+        req.setPassword(PASSWORD);
+
+        when(userRepository.count()).thenReturn(0L);
+        assertThat(authService.register(req).getRole()).isEqualTo("ROLE_ADMIN");
+
+        req.setEmail("otro@example.com");
+        when(userRepository.count()).thenReturn(1L);
+        assertThat(authService.register(req).getRole()).isEqualTo("ROLE_USER");
+    }
 }

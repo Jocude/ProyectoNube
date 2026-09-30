@@ -4,6 +4,7 @@ import com.cloudstorage.api.dto.AuthResponse;
 import com.cloudstorage.api.dto.LoginRequest;
 import com.cloudstorage.api.dto.RegisterRequest;
 import com.cloudstorage.api.entity.User;
+import com.cloudstorage.api.entity.UserRole;
 import com.cloudstorage.api.exception.ConflictException;
 import com.cloudstorage.api.exception.RegistrationDisabledException;
 import com.cloudstorage.api.repository.UserRepository;
@@ -79,25 +80,23 @@ public class AuthService {
             throw new ConflictException("El email ya está registrado");
         }
 
+        // El primer usuario es el propietario del servidor: administrador
+        UserRole role = userRepository.count() == 0 ? UserRole.ROLE_ADMIN : UserRole.ROLE_USER;
+
         User user =
                 User.builder()
                         .name(request.getName())
                         .email(email)
                         .password(passwordEncoder.encode(request.getPassword()))
+                        .role(role)
                         .build();
 
         User savedUser = userRepository.save(user);
         String token = jwtService.generateToken(savedUser);
 
-        log.info("Usuario registrado exitosamente: {}", savedUser.getEmail());
+        log.info("Usuario registrado exitosamente: {} ({})", savedUser.getEmail(), role);
 
-        return AuthResponse.builder()
-                .token(token)
-                .userId(savedUser.getId())
-                .name(savedUser.getName())
-                .email(savedUser.getEmail())
-                .role(savedUser.getRole().name())
-                .build();
+        return toResponse(savedUser, token);
     }
 
     /**
@@ -145,6 +144,20 @@ public class AuthService {
         String token = jwtService.generateToken(user);
         log.info("Usuario autenticado exitosamente: {}", user.getEmail());
 
+        return toResponse(user, token);
+    }
+
+    /**
+     * Datos de la sesión actual, sin token (la sesión ya existe en la cookie).
+     *
+     * @param user el usuario autenticado
+     * @return nombre, email y rol del usuario
+     */
+    public AuthResponse currentUser(User user) {
+        return toResponse(user, null);
+    }
+
+    private static AuthResponse toResponse(User user, String token) {
         return AuthResponse.builder()
                 .token(token)
                 .userId(user.getId())
