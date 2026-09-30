@@ -34,7 +34,15 @@ docker run --rm -v "$PWD":/app -v m2-cache:/root/.m2 -w /app maven:3.9-eclipse-t
 
 ## Seguridad
 - Rutas públicas definidas en `config/SecurityConfig.java` (`permitAll`); todo lo demás exige JWT vía `JwtAuthenticationFilter`. Al añadir endpoints, decidir explícitamente si van ahí.
+- El JWT llega por cabecera `Authorization: Bearer` (API/Swagger) o por la cookie HttpOnly `cs_session` (frontend; ver `config/AuthCookies`). Con cookie, los métodos que modifican datos exigen la cabecera `X-Requested-With` (anti-CSRF).
+- El primer usuario registrado es `ROLE_ADMIN` (migración V2 para instalaciones antiguas). `/api/admin/**` exige ese rol **y** la contraseña B2B.
+- CSP estricta (`script-src 'self'`): nada de `<script>` en línea ni atributos `onclick`/`onmouseover` en el HTML.
 - No commitear `.env`, `pgdata/`, `uploads/` ni `target/`; los secretos van en `.env` (plantillas: `.env.template`, `.env.example`).
+
+## Frontend (`src/main/resources/static`)
+- JS sin frameworks ni build. El DOM dinámico se crea con el helper `h()` de `app.js` (texto, nunca `innerHTML` con datos del usuario).
+- Todas las llamadas pasan por `api()`/`apiBlob()`, que añaden `X-Requested-With`. Diálogos con `dialog()`/`openModal()` (nunca `confirm`/`prompt`); Escape y clic en el fondo cierran cualquier `.preview-modal`.
+- Recorrido de interfaz con Playwright en Docker (`mcr.microsoft.com/playwright/python`): la CSP bloquea `page.wait_for_function`; usar locators/`expect`.
 
 ## Git
 - Commits directamente en `main`.

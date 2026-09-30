@@ -1527,3 +1527,458 @@ body {
   transform: rotate(90deg) scale(1.15);
   color: #667eea !important;
 }
+
+
+/* ==========================================================
+   21. Componentes de la versión 2 de la interfaz
+   ========================================================== */
+
+/* ── Engranaje del panel B2B (antes con estilos y eventos en línea) ── */
+.btn-gear {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 1.25rem;
+  cursor: pointer;
+  margin-right: 1rem;
+  padding: 0.2rem;
+}
+.btn-gear:hover,
+.btn-gear:focus-visible {
+  transform: rotate(45deg);
+}
+
+/* ── Foco visible para teclado en todos los controles ── */
+button:focus-visible,
+.file-card:focus-visible,
+.breadcrumb-item:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--primary-start);
+  outline-offset: 2px;
+}
+
+/* ── Pestañas de vista (Mis archivos / Compartidos / Papelera) ── */
+.view-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 24px;
+  padding: 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.view-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+.view-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
+}
+.view-tab.active {
+  color: var(--text-primary);
+  background: var(--primary-gradient);
+  box-shadow: 0 2px 12px var(--primary-glow);
+}
+.tab-badge {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 100px;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+/* ── Cabecera de sección y barra de herramientas ── */
+.files-section-right {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.files-section-right .btn,
+.btn-danger-outline {
+  padding: 8px 14px;
+  font-size: 0.85rem;
+}
+.toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.search-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 10px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.9rem;
+  outline: none;
+  transition: all var(--transition-base);
+}
+.search-input:focus {
+  border-color: var(--border-focus);
+  background: var(--bg-input-focus);
+}
+.toolbar-select {
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  width: 100%;
+}
+.toolbar .toolbar-select {
+  width: auto;
+}
+.toolbar-select option {
+  background: #14141f;
+}
+.view-toggle {
+  display: flex;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.view-toggle-btn {
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 1rem;
+  cursor: pointer;
+}
+.view-toggle-btn.active {
+  background: var(--bg-surface-active);
+  color: var(--text-primary);
+}
+
+/* ── Nombre y datos en líneas separadas; los nombres largos terminan en «…» ── */
+.file-name,
+.file-meta {
+  display: block;
+}
+
+/* ── Tarjetas: toda la tarjeta es clicable ── */
+.file-card {
+  cursor: pointer;
+}
+.file-card-actions {
+  flex-wrap: wrap;
+}
+.btn-icon {
+  flex: 1 1 0;
+  min-width: 38px;
+  padding: 8px;
+  font-size: 0.95rem;
+}
+
+/* ── Vista de lista ── */
+#files-grid.list-view {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+#files-grid.list-view .file-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+}
+#files-grid.list-view .file-card-header {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+  align-items: center;
+}
+#files-grid.list-view .file-card-actions {
+  padding-top: 0;
+  border-top: none;
+  flex-wrap: nowrap;
+}
+#files-grid.list-view .btn-icon {
+  flex: 0 0 auto;
+}
+
+/* ── Listas de compartidos y papelera ── */
+.view-hint {
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
+  margin: -8px 0 16px;
+}
+.item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  animation: fadeIn 0.3s ease forwards;
+}
+.list-row .file-info {
+  flex: 1;
+  min-width: 0;
+}
+.row-actions {
+  display: flex;
+  gap: 8px;
+}
+.row-actions .btn-action {
+  flex: 0 0 auto;
+}
+.status-badge {
+  padding: 3px 10px;
+  border-radius: 100px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.status-badge.ok {
+  color: var(--color-success);
+  background: rgba(52, 211, 153, 0.12);
+}
+.status-badge.expired {
+  color: var(--text-tertiary);
+  background: var(--bg-surface-hover);
+}
+
+/* ── Botones de acción peligrosa ── */
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  color: #fff;
+}
+.btn-danger:hover {
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.35);
+}
+.btn-danger-outline {
+  background: transparent;
+  color: var(--color-error);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+}
+.btn-danger-outline:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.1);
+}
+.btn-danger-outline:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Diálogos (confirmar, pedir texto, compartir, mover) ── */
+.dialog-content {
+  max-width: 460px;
+}
+.dialog-body {
+  padding: 20px 24px 24px;
+}
+.dialog-message {
+  color: var(--text-secondary);
+  font-size: 0.925rem;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+.dialog-message strong {
+  color: var(--text-primary);
+  word-break: break-all;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+.dialog-actions .btn {
+  padding: 10px 18px;
+  font-size: 0.9rem;
+}
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.share-result label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-success);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.copy-field {
+  display: flex;
+  gap: 8px;
+}
+.copy-field input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: monospace;
+  font-size: 0.8rem;
+}
+.copy-field .btn {
+  padding: 10px 14px;
+}
+.folder-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.folder-option {
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+.folder-option:hover:not(:disabled) {
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+}
+.folder-option.current {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── Vista previa ── */
+.preview-body .spinner {
+  margin: 0 auto;
+}
+.preview-loading,
+.preview-error {
+  text-align: center;
+  color: var(--text-secondary);
+  margin-top: 12px;
+}
+.preview-error {
+  color: var(--color-error);
+}
+.preview-unavailable {
+  text-align: center;
+  color: var(--text-secondary);
+}
+.preview-unavailable-icon {
+  font-size: 3rem;
+  margin-bottom: 8px;
+}
+.preview-unavailable .btn {
+  margin-top: 16px;
+}
+
+/* ── Campos de contraseña con botón de mostrar ── */
+.password-field {
+  position: relative;
+}
+.password-field input {
+  padding-right: 48px;
+}
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 1.05rem;
+  cursor: pointer;
+  padding: 6px;
+  opacity: 0.6;
+}
+.password-toggle:hover {
+  opacity: 1;
+}
+.field-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+}
+
+/* ── Móvil ── */
+@media (max-width: 768px) {
+  /* La zona de arrastrar ocupa demasiado en móvil: se usa el botón «Subir» */
+  .upload-zone {
+    display: none;
+  }
+  /* Avisos arriba para no tapar las primeras tarjetas */
+  #toast-container {
+    top: 16px;
+    bottom: auto;
+    flex-direction: column;
+  }
+  .files-section-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .search-input {
+    flex-basis: 100%;
+  }
+  .list-row {
+    flex-wrap: wrap;
+  }
+  .row-actions {
+    width: 100%;
+  }
+  .row-actions .btn-action {
+    flex: 1;
+  }
+  #files-grid.list-view .file-card {
+    flex-wrap: wrap;
+  }
+  #files-grid.list-view .file-card-actions {
+    width: 100%;
+  }
+  #files-grid.list-view .btn-icon {
+    flex: 1;
+  }
+  .btn-gear {
+    margin-right: 0.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  .view-tab {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+}

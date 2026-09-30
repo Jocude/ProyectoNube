@@ -21,7 +21,7 @@
     <!-- ========================================= -->
     <!-- Sección de Autenticación (Login/Registro) -->
     <!-- ========================================= -->
-    <section id="auth-section">
+    <section id="auth-section" class="hidden">
         <div class="auth-card">
             <!-- Encabezado con logo y título -->
             <div class="auth-header">
@@ -45,8 +45,11 @@
                 </div>
                 <div class="form-group">
                     <label for="login-password">Contraseña</label>
-                    <input type="password" id="login-password" name="password" required
+                    <div class="password-field">
+                        <input type="password" id="login-password" name="password" required
                            placeholder="••••••••" autocomplete="current-password">
+                        <button type="button" class="password-toggle" data-target="login-password" aria-label="Mostrar contraseña" title="Mostrar contraseña">👁️</button>
+                    </div>
                 </div>
                 <button type="submit" class="btn btn-primary" id="login-btn">
                     Iniciar Sesión
@@ -67,9 +70,13 @@
                 </div>
                 <div class="form-group">
                     <label for="register-password">Contraseña</label>
-                    <input type="password" id="register-password" name="password" required
+                    <div class="password-field">
+                        <input type="password" id="register-password" name="password" required
                            placeholder="Mínimo 8 caracteres" autocomplete="new-password"
-                           minlength="8">
+                           minlength="8" aria-describedby="register-password-hint">
+                        <button type="button" class="password-toggle" data-target="register-password" aria-label="Mostrar contraseña" title="Mostrar contraseña">👁️</button>
+                    </div>
+                    <small id="register-password-hint" class="field-hint">Mínimo 8 caracteres.</small>
                 </div>
                 <button type="submit" class="btn btn-primary" id="register-btn">
                     Crear Cuenta
@@ -91,13 +98,23 @@
             </div>
             <div class="header-right">
                 <span id="user-greeting" class="user-greeting"></span>
-                <button id="b2b-settings-btn" class="btn-gear" title="Configuración B2B" style="background:none; border:none; color:#fff; font-size:1.25rem; cursor:pointer; margin-right:1rem; transition:transform 0.3s ease; padding:0.2rem;" onmouseover="this.style.transform='rotate(45deg)'" onmouseout="this.style.transform='rotate(0deg)'">⚙️</button>
+                <button id="b2b-settings-btn" class="btn-gear hidden" title="Configuración B2B (administrador)" aria-label="Configuración B2B">⚙️</button>
                 <button id="logout-btn" class="btn btn-outline">Cerrar Sesión</button>
             </div>
         </header>
 
         <!-- Contenido principal -->
         <main class="dashboard-main">
+
+            <!-- Navegación entre vistas -->
+            <nav class="view-tabs" aria-label="Secciones">
+                <button class="view-tab active" data-view="files">📁 Mis archivos</button>
+                <button class="view-tab" data-view="shares">🔗 Compartidos</button>
+                <button class="view-tab" data-view="trash">🗑️ Papelera <span id="trash-count" class="tab-badge hidden"></span></button>
+            </nav>
+
+            <!-- ============ Vista: Mis archivos ============ -->
+            <section id="files-view" class="app-view">
 
             <!-- Barra de progreso de almacenamiento (Cuota) -->
             <div id="storage-quota-container" class="storage-quota-container">
@@ -131,11 +148,29 @@
             <!-- Encabezado de sección de archivos -->
             <div class="files-section-header">
                 <div class="files-section-left">
-                    <h3>Mis Archivos</h3>
+                    <h3 id="files-title">Mis Archivos</h3>
                     <span id="file-count" class="file-count">0 elementos</span>
                 </div>
                 <div class="files-section-right">
-                    <button id="new-folder-btn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">📁 Nueva Carpeta</button>
+                    <button id="upload-btn" class="btn btn-outline">📤 Subir</button>
+                    <button id="new-folder-btn" class="btn btn-outline">📁 Nueva carpeta</button>
+                </div>
+            </div>
+
+            <!-- Barra de herramientas: búsqueda, orden y vista -->
+            <div class="toolbar">
+                <input type="search" id="search-input" class="search-input" placeholder="🔍 Buscar en todos tus archivos…" aria-label="Buscar archivos" autocomplete="off">
+                <select id="sort-select" class="toolbar-select" aria-label="Ordenar por">
+                    <option value="name-asc">Nombre (A-Z)</option>
+                    <option value="name-desc">Nombre (Z-A)</option>
+                    <option value="date-desc">Más recientes</option>
+                    <option value="date-asc">Más antiguos</option>
+                    <option value="size-desc">Más grandes</option>
+                    <option value="size-asc">Más pequeños</option>
+                </select>
+                <div class="view-toggle" role="group" aria-label="Tipo de vista">
+                    <button class="view-toggle-btn active" data-layout="grid" aria-label="Vista de cuadrícula" title="Cuadrícula">▦</button>
+                    <button class="view-toggle-btn" data-layout="list" aria-label="Vista de lista" title="Lista">☰</button>
                 </div>
             </div>
 
@@ -149,9 +184,9 @@
 
             <!-- Estado vacío -->
             <div id="empty-state" class="empty-state hidden">
-                <div class="empty-icon">📭</div>
-                <h3>No hay archivos aún</h3>
-                <p>Sube tu primer archivo arrastrándolo a la zona superior o haciendo clic en ella.</p>
+                <div class="empty-icon" id="empty-icon">📭</div>
+                <h3 id="empty-title">No hay archivos aún</h3>
+                <p id="empty-text">Sube tu primer archivo arrastrándolo a la zona superior o haciendo clic en ella.</p>
             </div>
 
             <!-- Estado de carga -->
@@ -159,6 +194,45 @@
                 <div class="spinner"></div>
                 <p>Cargando archivos…</p>
             </div>
+
+            </section>
+
+            <!-- ============ Vista: Compartidos ============ -->
+            <section id="shares-view" class="app-view hidden">
+                <div class="files-section-header">
+                    <div class="files-section-left">
+                        <h3>Enlaces compartidos</h3>
+                        <span id="shares-count" class="file-count">0 enlaces</span>
+                    </div>
+                </div>
+                <p class="view-hint">Cualquiera con el enlace puede descargar el archivo, sin cuenta, hasta que caduque o lo revoques.</p>
+                <div id="shares-list" class="item-list"></div>
+                <div id="shares-empty" class="empty-state hidden">
+                    <div class="empty-icon">🔗</div>
+                    <h3>No has compartido nada todavía</h3>
+                    <p>Usa el botón 🔗 de un archivo para crear un enlace público.</p>
+                </div>
+            </section>
+
+            <!-- ============ Vista: Papelera ============ -->
+            <section id="trash-view" class="app-view hidden">
+                <div class="files-section-header">
+                    <div class="files-section-left">
+                        <h3>Papelera</h3>
+                        <span id="trash-total" class="file-count">0 archivos</span>
+                    </div>
+                    <div class="files-section-right">
+                        <button id="empty-trash-btn" class="btn btn-danger-outline">Vaciar papelera</button>
+                    </div>
+                </div>
+                <p class="view-hint">Los archivos de la papelera siguen ocupando espacio de tu cuota hasta que los elimines definitivamente.</p>
+                <div id="trash-list" class="item-list"></div>
+                <div id="trash-empty" class="empty-state hidden">
+                    <div class="empty-icon">✨</div>
+                    <h3>La papelera está vacía</h3>
+                    <p>Los archivos que muevas a la papelera aparecerán aquí.</p>
+                </div>
+            </section>
 
         </main>
     </section>
@@ -179,21 +253,85 @@
     </div>
 
     <!-- ========================================= -->
-    <!-- Modal para Nueva Carpeta                  -->
+    <!-- Diálogo genérico: confirmar / pedir texto -->
     <!-- ========================================= -->
-    <div id="folder-modal" class="preview-modal hidden">
-        <div class="preview-modal-content" style="max-width: 400px; padding: 1.5rem; background: var(--surface-bg, rgba(255, 255, 255, 0.05)); border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08)); border-radius: 1rem;">
-            <div class="preview-header" style="padding: 0 0 1rem 0; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.08); background: none;">
-                <h3 style="margin: 0; font-size: 1.1rem; color: #fff;">Crear Nueva Carpeta</h3>
-                <button id="folder-modal-close" class="btn-close">&times;</button>
+    <div id="dialog-modal" class="preview-modal hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+        <div class="preview-modal-content dialog-content">
+            <div class="preview-header">
+                <h3 id="dialog-title">Confirmar</h3>
+                <button type="button" class="btn-close" data-close aria-label="Cerrar">&times;</button>
             </div>
-            <form id="create-folder-form">
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label for="folder-name-input" style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: rgba(255,255,255,0.6);">Nombre de la carpeta</label>
-                    <input type="text" id="folder-name-input" required placeholder="Nueva carpeta" autocomplete="off" style="width: 100%; padding: 0.6rem; border-radius: 0.4rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff;">
+            <form id="dialog-form" class="dialog-body">
+                <p id="dialog-message" class="dialog-message"></p>
+                <div id="dialog-input-group" class="form-group hidden">
+                    <label for="dialog-input" id="dialog-input-label">Nombre</label>
+                    <input type="text" id="dialog-input" autocomplete="off" maxlength="255">
                 </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.6rem; border-radius: 0.4rem;">Crear Carpeta</button>
+                <div class="dialog-actions">
+                    <button type="button" class="btn btn-outline" data-close>Cancelar</button>
+                    <button type="submit" id="dialog-confirm" class="btn btn-primary">Aceptar</button>
+                </div>
             </form>
+        </div>
+    </div>
+
+    <!-- ========================================= -->
+    <!-- Modal para compartir un archivo           -->
+    <!-- ========================================= -->
+    <div id="share-modal" class="preview-modal hidden" role="dialog" aria-modal="true" aria-labelledby="share-title">
+        <div class="preview-modal-content dialog-content">
+            <div class="preview-header">
+                <h3 id="share-title">Compartir archivo</h3>
+                <button type="button" class="btn-close" data-close aria-label="Cerrar">&times;</button>
+            </div>
+            <form id="share-form" class="dialog-body">
+                <p class="dialog-message">Crea un enlace público para <strong id="share-file-name"></strong>. Quien lo tenga podrá descargarlo sin cuenta.</p>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="share-expiration">Caduca en</label>
+                        <select id="share-expiration" class="toolbar-select">
+                            <option value="1">1 hora</option>
+                            <option value="24" selected>1 día</option>
+                            <option value="168">7 días</option>
+                            <option value="720">30 días</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="share-max-downloads">Máx. descargas</label>
+                        <input type="number" id="share-max-downloads" min="1" placeholder="Ilimitadas">
+                    </div>
+                </div>
+                <div id="share-result" class="share-result hidden">
+                    <label for="share-url">Enlace listo</label>
+                    <div class="copy-field">
+                        <input type="text" id="share-url" readonly>
+                        <button type="button" id="share-copy" class="btn btn-outline">Copiar</button>
+                    </div>
+                </div>
+                <div class="dialog-actions">
+                    <button type="button" class="btn btn-outline" data-close>Cerrar</button>
+                    <button type="submit" id="share-create" class="btn btn-primary">Crear enlace</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========================================= -->
+    <!-- Modal para mover un archivo               -->
+    <!-- ========================================= -->
+    <div id="move-modal" class="preview-modal hidden" role="dialog" aria-modal="true" aria-labelledby="move-title">
+        <div class="preview-modal-content dialog-content">
+            <div class="preview-header">
+                <h3 id="move-title">Mover archivo</h3>
+                <button type="button" class="btn-close" data-close aria-label="Cerrar">&times;</button>
+            </div>
+            <div class="dialog-body">
+                <p class="dialog-message">Elige la carpeta de destino para <strong id="move-file-name"></strong>.</p>
+                <div id="move-folder-list" class="folder-picker" aria-label="Carpetas"></div>
+                <div class="dialog-actions">
+                    <button type="button" class="btn btn-outline" data-close>Cancelar</button>
+                </div>
+            </div>
         </div>
     </div>
 
