@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/format-java.sh >/dev/null 2>&1 || true",
+            "timeout": 90,
+            "statusMessage": "Formateando Java (Spotless)..."
+          }
+        ]
+      }
+    ]
+  }
+}
