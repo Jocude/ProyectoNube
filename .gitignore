@@ -3,8 +3,11 @@
 .env.*
 !.env.example
 !.env.template
+
+# --- Configuración local de Claude Code (no forma parte del proyecto) ---
+CLAUDE.md
 CLAUDE.local.md
-.claude/settings.local.json
+.claude/
 
 # --- Datos en tiempo de ejecución ---
 pgdata/
